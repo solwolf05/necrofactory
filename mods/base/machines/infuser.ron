@@ -1,0 +1,11 @@
+(
+    id: "infuser",
+    name: "Infuser",
+    size: (1, 1),
+    sprite: "red.png",
+    recipe_types: ["compaction"],
+    inputs: 1,
+    outputs: 1,
+    blood_capacity: 1000,
+    item_stack_modifier: 1,
+)

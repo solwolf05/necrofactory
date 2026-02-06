@@ -1,0 +1,10 @@
+(
+    id: "up",
+    name: "Up",
+    default: InputBinding (
+        kind: KeyButton(KeyW),
+        shift: false,
+        control: false,
+        alt: false,
+    ),
+)

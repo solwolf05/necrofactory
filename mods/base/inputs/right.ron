@@ -1,0 +1,10 @@
+(
+    id: "right",
+    name: "Right",
+    default: InputBinding (
+        kind: KeyButton(KeyD),
+        shift: false,
+        control: false,
+        alt: false,
+    ),
+)
