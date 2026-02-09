@@ -5,13 +5,28 @@ use bevy_modding::prelude::*;
 use bevy_modding_input::{InputAction, InputBinding};
 use serde::Deserialize;
 
-use crate::modding::{Mod, Mods, mods_path, serialisation::Metadata};
+use crate::{
+    modding::{Mod, Mods, mods_path, serialisation::Metadata},
+    world::tile::TileDef,
+};
+
+#[derive(Debug, Default, Resource)]
+pub struct TileTextures {
+    pub handles: Vec<(Id<TileDef>, Handle<Image>)>,
+}
+
+pub fn all_tile_textures_loaded(server: Res<AssetServer>, pending: Res<TileTextures>) {
+    pending
+        .handles
+        .iter()
+        .all(|(_, h)| server.wait(h));
+}
 
 pub fn discover_mods(mut mods: ResMut<Mods>) {
     let entries = match fs::read_dir(mods_path()) {
         Ok(e) => e.flatten(),
         Err(e) => {
-            error!("error reading mods dir: {}", e);
+            error!("Error reading mods dir: {}", e);
             return;
         }
     };
@@ -42,14 +57,14 @@ pub fn discover_mods(mut mods: ResMut<Mods>) {
         let metadata: Metadata = match toml::from_slice(&bytes) {
             Ok(m) => m,
             Err(e) => {
-                error!("error parsing {}: {}", metadata_path.display(), e);
+                error!("Error parsing {}: {}", metadata_path.display(), e);
                 error += 1;
                 continue;
             }
         };
 
-        if !RegPath::is_valid_segment(&metadata.id) {
-            error!("invalid mod id: {}", metadata.id);
+        if !RegistryPath::is_valid_segment(&metadata.id) {
+            error!("Invalid mod id: {}", metadata.id);
             error += 1;
             continue;
         };
@@ -80,7 +95,7 @@ pub fn load_inputs(mods: Res<Mods>, mut registry: ResMut<Registry<InputAction>>)
                 Ok(i) => i,
                 Err(e) => {
                     error!(
-                        "error while parsing input definition at {}: {}",
+                        "Error while parsing input definition at {}: {}",
                         path.display(),
                         e
                     );
@@ -88,7 +103,7 @@ pub fn load_inputs(mods: Res<Mods>, mut registry: ResMut<Registry<InputAction>>)
                 }
             };
 
-            let reg_path = match RegPath::from_parts(mod_id.as_ref(), raw_input.id.as_ref()) {
+            let reg_path = match RegistryPath::from_parts(mod_id, &raw_input.id) {
                 Some(p) => p,
                 None => {
                     error!("Invalid registry path: {}::{}", mod_id, raw_input.id);
@@ -105,6 +120,78 @@ pub fn load_inputs(mods: Res<Mods>, mut registry: ResMut<Registry<InputAction>>)
         }
     }
     info!("Loaded mod inputs")
+}
+
+pub fn load_tiles(mods: Res<Mods>, mut registry: ResMut<Registry<TileDef>>) {
+    registry.register(
+        "core::none",
+        TileDef {
+            sprite_path: "missing.png".to_owned(),
+        },
+    );
+    registry.register(
+        "core::some",
+        TileDef {
+            sprite_path: "block.png".to_owned(),
+        },
+    );
+
+    for (mod_id, mod_data) in &mods.mods {
+        let path = mod_data.path.join("tiles");
+        let Ok(entries) = fs::read_dir(path) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(string) = fs::read_to_string(&path) else {
+                continue;
+            };
+            let raw_tile: RawTile = match ron::from_str(&string) {
+                Ok(i) => i,
+                Err(e) => {
+                    error!(
+                        "Error while parsing tile definition at {}: {}",
+                        path.display(),
+                        e
+                    );
+                    continue;
+                }
+            };
+
+            let reg_path = match RegistryPath::from_parts(mod_id, &raw_tile.id) {
+                Some(p) => p,
+                None => {
+                    error!("Invalid registry path: {}::{}", mod_id, raw_tile.id);
+                    continue;
+                }
+            };
+
+            let tile = TileDef {
+                sprite_path: raw_tile.sprite_path,
+            };
+
+            registry.register(reg_path, tile);
+        }
+    }
+    info!("Loaded mod tiles")
+}
+
+pub fn load_tile_textures(
+    tiles: Res<Registry<TileDef>>,
+    mut textures: ResMut<TileTextures>,
+    asset_server: Res<AssetServer>,
+) {
+    for (id, _, tile) in tiles.iter_with_id() {
+        let handle = asset_server.load(&tile.sprite_path);
+        textures.handles.push((id, handle));
+    }
+}
+
+#[derive(Deserialize)]
+struct RawTile {
+    id: String,
+    sprite_path: String,
 }
 
 #[derive(Deserialize)]

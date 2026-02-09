@@ -1,27 +1,42 @@
 use std::{fmt::Display, hash::Hash};
 
-use crate::world::tile::Tile;
+use bevy::prelude::*;
+use bevy_modding::prelude::Id;
+
+use crate::world::{CHUNK_SIZE, TILE_SIZE, tile::Tile};
 
 #[derive(Debug)]
 pub struct Chunk {
-    tiles: [Option<Tile>; 256],
+    tiles: Vec<Tile>,
+    pub dirty: bool,
 }
 
 impl Chunk {
     pub fn empty() -> Self {
-        Self { tiles: [None; 256] }
+        Self {
+            tiles: vec![Tile::new(Id::new(0)); 256],
+            dirty: false,
+        }
     }
 
     pub fn insert(&mut self, position: TilePosition, tile: Tile) {
-        self.tiles[position.0 as usize] = Some(tile);
+        self.dirty = true;
+        self.tiles[position.0 as usize] = tile;
     }
 
+    /// Replace the tile with the default tile.
     pub fn remove(&mut self, position: TilePosition) {
-        self.tiles[position.0 as usize] = None;
+        self.dirty = true;
+        self.tiles[position.0 as usize] = Tile::default();
     }
 
-    pub fn get(&self, position: TilePosition) -> Option<&Tile> {
-        self.tiles[position.0 as usize].as_ref()
+    pub fn get(&self, position: TilePosition) -> &Tile {
+        &self.tiles[position.0 as usize]
+    }
+
+    pub fn get_mut(&mut self, position: TilePosition) -> &mut Tile {
+        self.dirty = true;
+        &mut self.tiles[position.0 as usize]
     }
 }
 

@@ -1,0 +1,10 @@
+(
+    id: "toggle",
+    name: "Toggle",
+    default: InputBinding (
+        kind: MouseButton(Left),
+        shift: false,
+        control: false,
+        alt: false,
+    ),
+)

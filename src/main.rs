@@ -4,8 +4,9 @@ use bevy_modding_input::prelude::*;
 
 use crate::{
     modding::ModLoadPlugin,
-    world::{World, WorldPlugin},
-    world_gen::dev_gen,
+    render::RenderPlugin,
+    world::{TILE_SIZE, World, WorldPlugin, WorldPosition},
+    world_gen::{WorldGenPlugin, dev_gen},
 };
 
 mod modding;
@@ -18,9 +19,6 @@ fn main() -> AppExit {
     App::new()
         .add_plugins((
             ModLoadPlugin,
-            ModPlugin,
-            InputPlugin,
-            WorldPlugin,
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
@@ -32,21 +30,16 @@ fn main() -> AppExit {
                     ..Default::default()
                 })
                 .set(ImagePlugin::default_nearest()),
+            ModPlugin,
+            InputPlugin,
+            WorldPlugin,
+            WorldGenPlugin,
+            RenderPlugin,
         ))
-        .add_systems(Startup, (setup, gen_world, asset_test))
-        .add_systems(Update, (esc_exit, camera_follow))
+        .add_systems(Startup, setup)
+        .add_systems(Update, (esc_exit, camera_follow, zoom, toggle_tile))
         .add_systems(FixedUpdate, player_move)
         .run()
-}
-
-fn gen_world(world: ResMut<World>) {
-    dev_gen(world.into_inner());
-}
-
-fn asset_test(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Sprite::from_image(
-        asset_server.load("mods://base/assets/red.png"),
-    ));
 }
 
 fn setup(mut commands: Commands) {
@@ -60,7 +53,11 @@ fn setup(mut commands: Commands) {
         }),
     ));
 
-    commands.spawn((Player, Transform::default()));
+    commands.spawn((
+        Player,
+        Transform::default(),
+        Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
+    ));
 }
 
 #[derive(Component)]
@@ -74,22 +71,62 @@ fn camera_follow(
     camera.single_mut().unwrap().translation = player.single().unwrap().translation;
 }
 
-fn player_move(mut player: Query<&mut Transform, With<Player>>, input: Res<InputState>) {
+fn player_move(
+    mut player: Query<&mut Transform, With<Player>>,
+    input: Res<InputState>,
+    registry: Res<Registry<InputAction>>,
+) {
     let mut transform = player.single_mut().unwrap();
 
-    let up = RegHandle::new(0);
-    let down = RegHandle::new(1);
-    let left = RegHandle::new(2);
-    let right = RegHandle::new(3);
-    let fast = RegHandle::new(4);
+    let up = registry.lookup("base::up").unwrap();
+    let down = registry.lookup("base::down").unwrap();
+    let left = registry.lookup("base::left").unwrap();
+    let right = registry.lookup("base::right").unwrap();
+    let fast = registry.lookup("base::fast").unwrap();
 
     let axes = input.vec2(right, left, up, down);
     let speed = match input.pressed(fast) {
-        true => 4.0,
-        false => 1.0,
+        true => 8.0,
+        false => 2.0,
     };
 
     transform.translation += axes.normalize_or_zero().extend(0.0) * speed;
+}
+
+fn zoom(
+    mut camera: Query<&mut Projection, With<Camera>>,
+    input: Res<InputState>,
+    registry: Res<Registry<InputAction>>,
+) {
+    let projection = camera.single_mut().unwrap().into_inner();
+    if let Projection::Orthographic(projection) = projection {
+        let zoom;
+        if input.just_pressed(registry.lookup("base::zoom_in").unwrap()) {
+            zoom = 1.0;
+        } else if input.just_pressed(registry.lookup("base::zoom_out").unwrap()) {
+            zoom = -1.0;
+        } else {
+            zoom = 0.0;
+        }
+        projection.scale *= 1.0 - zoom * 0.25;
+    }
+}
+
+fn toggle_tile(
+    mut world: ResMut<World>,
+    player: Query<&Transform, With<Player>>,
+    input: Res<InputState>,
+    registry: Res<Registry<InputAction>>,
+) {
+    let player_pos = WorldPosition::from_bevy(player.single().unwrap().translation);
+    if input.just_pressed(registry.lookup("base::toggle").unwrap()) {
+        let tile = world.get_tile_mut(player_pos).unwrap();
+        if tile.id.0 == 0 {
+            tile.id.0 = 1;
+        } else {
+            tile.id.0 = 0;
+        }
+    }
 }
 
 fn esc_exit(input: Res<ButtonInput<KeyCode>>, mut exit: MessageWriter<AppExit>) {

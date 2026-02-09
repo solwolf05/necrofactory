@@ -7,10 +7,14 @@ use bevy::{
 use bevy_modding::prelude::*;
 use bevy_modding_input::InputAction;
 
-use crate::modding::{
-    loader::{discover_mods, load_inputs},
-    serialisation::Metadata,
-};
+use loader::{discover_mods, load_inputs, load_tiles};
+use serialisation::Metadata;
+
+use loader::load_tile_textures;
+
+pub use loader::{TileTextures, all_tile_textures_loaded};
+
+use crate::world::tile::TileDef;
 
 mod loader;
 mod serialisation;
@@ -21,9 +25,11 @@ pub struct ModLoadPlugin;
 impl Plugin for ModLoadPlugin {
     fn build(&self, app: &mut bevy::app::App) {
         app.init_resource::<Mods>()
+            .init_resource::<Registry<TileDef>>()
+            .init_resource::<TileTextures>()
             .add_systems(PreModLoad, discover_mods)
-            .add_systems(ModLoad, load_inputs)
-            .add_systems(PostModLoad, check_registries);
+            .add_systems(ModLoad, (load_inputs, load_tiles))
+            .add_systems(PostModLoad, (load_tile_textures, check_registries));
 
         app.register_asset_source(
             AssetSourceId::Name("mods".into()),
@@ -45,8 +51,9 @@ fn mods_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods")
 }
 
-fn check_registries(input: Res<Registry<InputAction>>) {
-    info!("Inputs:\n{:?}", *input);
+fn check_registries(inputs: Res<Registry<InputAction>>, tiles: Res<Registry<TileDef>>) {
+    info!("Inputs:\n{:?}", *inputs);
+    info!("Tiles:\n{:?}", *tiles);
 }
 
 #[derive(Debug, Default, Resource)]
@@ -65,7 +72,7 @@ impl Mod {
         Self { metadata, path }
     }
 
-    pub fn join_path(&self, path: RegPath) -> Option<RegPath> {
-        RegPath::new(&format!("{}{}", self.metadata.id, path))
+    pub fn join_path(&self, path: RegistryPath) -> Option<RegistryPath> {
+        RegistryPath::new(&format!("{}{}", self.metadata.id, path))
     }
 }

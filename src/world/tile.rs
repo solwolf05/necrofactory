@@ -1,28 +1,23 @@
 use bevy_modding::prelude::*;
 
-pub struct TileDef {}
+#[derive(Debug)]
+pub struct TileDef {
+    pub sprite_path: String,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tile {
-    id: RegHandle<TileDef>,
-    flags: u8,
+    pub id: Id<TileDef>,
 }
 
 impl Tile {
-    pub const MACHINE: u8 = 0b1;
-
-    pub fn new(handle: RegHandle<TileDef>) -> Self {
-        Self {
-            id: handle,
-            flags: 0,
-        }
+    pub fn new(id: Id<TileDef>) -> Self {
+        Self { id }
     }
+}
 
-    pub fn add_machine(&mut self) {
-        self.flags |= Self::MACHINE;
-    }
-
-    pub fn has_machine(&self) -> bool {
-        self.flags & Self::MACHINE != 0
+impl Default for Tile {
+    fn default() -> Self {
+        Self::new(Id::new(0))
     }
 }
