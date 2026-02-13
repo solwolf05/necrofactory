@@ -13,7 +13,7 @@ pub struct Chunk {
 impl Chunk {
     pub fn empty() -> Self {
         Self {
-            tiles: vec![Tile::new(Id::new(0)); 256],
+            tiles: vec![Tile::new(Id::ZERO); 256],
             dirty: false,
         }
     }

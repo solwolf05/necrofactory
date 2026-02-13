@@ -105,11 +105,18 @@ impl<T> Default for Registry<T> {
 }
 
 /// A id to an definition in a registry.
-pub struct Id<T>(pub u32, PhantomData<T>);
+pub struct Id<T>(u32, PhantomData<T>);
 
 impl<T> Id<T> {
-    pub const fn new(id: u32) -> Self {
+    pub const ZERO: Self = Self(0, PhantomData);
+    pub const ONE: Self = Self(1, PhantomData);
+
+    pub(super) const fn new(id: u32) -> Self {
         Self(id, PhantomData)
+    }
+
+    pub fn get(&self) -> u32 {
+        self.0
     }
 }
 

@@ -7,7 +7,10 @@ use bevy::{
 
 use serde::Deserialize;
 
-use crate::modding::types::{Id, Registry};
+use crate::modding::{
+    ModLoadState,
+    types::{Id, Registry},
+};
 
 pub struct InputPlugin;
 
@@ -16,7 +19,7 @@ impl Plugin for InputPlugin {
         app.init_resource::<InputState>()
             .init_resource::<InputBindings>()
             .init_resource::<Registry<InputAction>>()
-            .add_systems(Startup, setup_input_map)
+            .add_systems(OnEnter(ModLoadState::Finalize), setup_input_map)
             .add_systems(
                 PreUpdate,
                 (

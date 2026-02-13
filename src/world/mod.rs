@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bevy::prelude::*;
+use bevy::{math::I64Vec2, prelude::*};
 
 use chunk::{Chunk, TilePosition};
 use tile::Tile;
@@ -112,7 +112,7 @@ impl WorldPosition {
         self.chunk.y as i64 * CHUNK_SIZE as i64 + self.tile.y() as i64
     }
 
-    pub fn to_xy(&self) -> (i64, i64) {
-        (self.x(), self.y())
+    pub fn to_xy(&self) -> I64Vec2 {
+        I64Vec2::new(self.x(), self.y())
     }
 }

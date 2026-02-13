@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
 use crate::{
-    Player,
+    AppState, Player,
+    modding::types::Id,
     world::{
         World, WorldPosition,
         chunk::{Chunk, TilePosition},
@@ -13,7 +14,7 @@ pub struct WorldGenPlugin;
 
 impl Plugin for WorldGenPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, dynamic_gen);
+        app.add_systems(Update, dynamic_gen.run_if(in_state(AppState::InGame)));
     }
 }
 
@@ -44,7 +45,7 @@ pub fn test_gen_chunk(world: &mut World, pos: IVec2) {
     let mut chunk = Chunk::empty();
     for i in 0..=255 {
         if rand::random_bool(0.25) {
-            chunk.insert(TilePosition::new(i), Tile::new(Id::new(1)));
+            chunk.insert(TilePosition::new(i), Tile::new(Id::ONE));
         }
     }
     world.insert_chunk(pos, chunk);

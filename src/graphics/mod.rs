@@ -1,16 +1,13 @@
-use std::collections::HashMap;
-
 use bevy::{
     asset::RenderAssetUsages,
-    image::ImageSampler,
     mesh::{Indices, PrimitiveTopology},
     platform::collections::HashSet,
     prelude::*,
 };
 
 use crate::{
-    Player,
-    modding::{TileTextures, all_tile_textures_loaded},
+    AppState, Player,
+    modding::types::Id,
     world::{
         CHUNK_SIZE, TILE_SIZE, World, WorldPosition,
         chunk::{Chunk, TilePosition},
@@ -22,85 +19,55 @@ pub struct GraphicsPlugin;
 
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            PostModLoad,
-            build_texture_atlas_system.after(all_tile_textures_loaded),
-        )
-        .add_systems(Update, spawn_test_chunks)
-        .add_systems(PostUpdate, build_meshes);
+        app.add_systems(Update, spawn_test_chunks.run_if(in_state(AppState::InGame)))
+            .add_systems(PostUpdate, build_meshes.run_if(in_state(AppState::InGame)));
     }
 }
 
-#[derive(Debug, Resource)]
-struct TextureAtlasCache {
-    pub map: HashMap<Id<TileDef>, u32>,
-    pub layout: TextureAtlasLayout,
-    pub sources: TextureAtlasSources,
-    pub texture: Handle<Image>,
-}
+// fn build_atlas_system(
+//     mut commands: Commands,
+//     mut registry: ResMut<Registry<TileDef>>,
+//     mut asset_server: Res<AssetServer>,
+//     mut images: ResMut<Assets<Image>>,
+//     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
+//     mut materials: ResMut<Assets<ColorMaterial>>,
+// ) {
+//     // 1) Create a TextureAtlasBuilder and add all registered images
+//     let mut builder = TextureAtlasBuilder::default();
 
-fn build_texture_atlas_system(
-    mut commands: Commands,
-    tile_textures: Res<TileTextures>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    let mut builder = TextureAtlasBuilder::default();
-    builder.padding(UVec2::splat(2));
+//     let mut handles = Vec::new();
+//     for (_, tile) in registry.iter() {
+//         handles.push(asset_server.load(tile.sprite_path));
+//     }
+//     for handle in handles {
+//         let image = images.get(&handle).unwrap();
+//         builder.add_texture(None, image);
+//     }
 
-    let mut map = HashMap::new();
+//     // 2) build atlas (packer does the work). returns (layout, sources, image)
+//     let (atlas_layout, _sources, atlas_image) = builder.build().expect("atlas build failed");
 
-    info!("{:?}", tile_textures);
+//     // 3) add image & layout into asset storage
+//     let atlas_image_handle = images.add(atlas_image);
+//     let atlas_layout_handle = layouts.add(atlas_layout);
 
-    for (_tile_id, handle) in &tile_textures.handles {
-        let image = images.get(handle).unwrap();
-        builder.add_texture(Some(handle.id()), image);
-    }
+//     // 4) create a ColorMaterial that uses the atlas image
+//     let material_handle = materials.add(ColorMaterial::from(atlas_image_handle.clone()));
 
-    let (layout, sources, mut atlas_image) = builder.build().unwrap();
+//     commands.insert_resource(Atlas {
+//         image_handle: atlas_image_handle,
+//         layout_handle: atlas_layout_handle,
+//         material_handle,
+//     });
 
-    // pixel art
-    atlas_image.sampler = ImageSampler::nearest();
-
-    let texture = images.add(atlas_image);
-
-    // map tile → atlas rect index
-    for (&source, &rect_index) in &sources.texture_ids {
-        let tile = tile_textures
-            .handles
-            .iter()
-            .find(|(_, h)| h.id() == source)
-            .unwrap();
-
-        map.insert(tile.0.clone(), rect_index as u32);
-    }
-
-    commands.insert_resource(TextureAtlasCache {
-        map,
-        layout,
-        sources,
-        texture,
-    });
-}
-
-fn atlas_uv(rect: &URect, atlas_size: UVec2) -> [[f32; 2]; 4] {
-    let w = atlas_size.x as f32;
-    let h = atlas_size.y as f32;
-
-    let u0 = rect.min.x as f32 / w;
-    let v0 = rect.min.y as f32 / h;
-    let u1 = rect.max.x as f32 / w;
-    let v1 = rect.max.y as f32 / h;
-
-    [[u0, v0], [u1, v0], [u1, v1], [u0, v1]]
-}
+//     // registry can be dropped or kept for metadata mapping (tile id -> index)
+// }
 
 fn build_meshes(
     mut meshes: ResMut<Assets<Mesh>>,
     mut query: Query<(&RenderChunk, &mut Mesh2d)>,
     mut world: ResMut<World>,
-    atlas: Res<TextureAtlasCache>,
 ) {
-    let atlas = atlas.into_inner();
     for (render_chunk, mut mesh2d) in query.iter_mut() {
         let Some(chunk) = world.get_chunk_mut(render_chunk.0) else {
             continue;
@@ -110,14 +77,14 @@ fn build_meshes(
             continue;
         }
 
-        let mesh = build_chunk_mesh(chunk, atlas);
+        let mesh = build_chunk_mesh(chunk);
         *mesh2d = Mesh2d(meshes.add(mesh));
 
         chunk.dirty = false;
     }
 }
 
-fn build_chunk_mesh(chunk: &Chunk, atlas: &TextureAtlasCache) -> Mesh {
+fn build_chunk_mesh(chunk: &Chunk) -> Mesh {
     let mut positions = Vec::new();
     let mut uvs = Vec::new();
     let mut indices = Vec::new();
@@ -127,7 +94,7 @@ fn build_chunk_mesh(chunk: &Chunk, atlas: &TextureAtlasCache) -> Mesh {
     for y in 0..CHUNK_SIZE {
         for x in 0..CHUNK_SIZE {
             let tile = chunk.get(TilePosition::from_xy(x as u8, y as u8).unwrap());
-            if tile.id.0 == 0 {
+            if tile.id == Id::ZERO {
                 continue;
             }
 
@@ -142,14 +109,8 @@ fn build_chunk_mesh(chunk: &Chunk, atlas: &TextureAtlasCache) -> Mesh {
                 [x, y + TILE_SIZE as f32, 0.0],
             ]);
 
-            info!("{:?}", atlas);
-
-            let atlas_index = atlas.map[&tile.id];
-            let rect = atlas.layout.textures[atlas_index as usize];
-            let tile_uvs = atlas_uv(&rect, atlas.layout.size);
-
             // TEMP UVs (replace with atlas math later)
-            uvs.extend_from_slice(&tile_uvs);
+            uvs.extend_from_slice(&[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
 
             indices.extend_from_slice(&[
                 index_offset,

@@ -59,7 +59,7 @@ impl Plugin for ModPlugin {
             )
             .add_systems(OnEnter(ModLoadState::LoadAssets), load_assets)
             .add_systems(OnEnter(ModLoadState::Finalize), finalize)
-            .add_systems(OnExit(ModLoadState::Finalize), check_registries);
+            .add_systems(OnEnter(ModLoadState::Finalize), check_registries);
 
         app.register_asset_source(
             AssetSourceId::Name("mods".into()),
@@ -70,7 +70,7 @@ impl Plugin for ModPlugin {
 
 #[derive(SubStates, Debug, Default, Clone, Eq, PartialEq, Hash)]
 #[source(AppState = AppState::ModLoading)]
-enum ModLoadState {
+pub enum ModLoadState {
     #[default]
     Discover,
     Validate,

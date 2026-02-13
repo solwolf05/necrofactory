@@ -4,5 +4,5 @@ use crate::AppState;
 
 pub fn finalize(mut state: ResMut<NextState<AppState>>) {
     info!("Mod loading complete");
-    state.set(AppState::MainMenu);
+    state.set(AppState::InGame);
 }

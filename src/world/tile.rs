@@ -18,6 +18,6 @@ impl Tile {
 
 impl Default for Tile {
     fn default() -> Self {
-        Self::new(Id::new(0))
+        Self::new(Id::ZERO)
     }
 }
