@@ -1,5 +1,5 @@
 (
-    id: "right",
+    path: "right",
     name: "Right",
     default: InputBinding (
         kind: KeyButton(KeyD),

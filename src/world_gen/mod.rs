@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy_modding::prelude::*;
 
 use crate::{
     Player,

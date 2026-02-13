@@ -1,5 +1,5 @@
 (
-    id: "zoom_out",
+    path: "zoom_out",
     name: "Zoom Out",
     default: InputBinding (
         kind: KeyButton(KeyQ),

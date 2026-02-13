@@ -1,5 +1,5 @@
 (
-    id: "up",
+    path: "up",
     name: "Up",
     default: InputBinding (
         kind: KeyButton(KeyW),

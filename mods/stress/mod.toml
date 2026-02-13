@@ -1,0 +1,7 @@
+id = "stress"
+name = "Stress Test"
+version = "0.1.0"
+author = "Sol Wolf"
+
+[dependencies]
+base = "0.1"

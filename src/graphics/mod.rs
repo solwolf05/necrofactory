@@ -7,7 +7,6 @@ use bevy::{
     platform::collections::HashSet,
     prelude::*,
 };
-use bevy_modding::prelude::*;
 
 use crate::{
     Player,
@@ -19,9 +18,9 @@ use crate::{
     },
 };
 
-pub struct RenderPlugin;
+pub struct GraphicsPlugin;
 
-impl Plugin for RenderPlugin {
+impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PostModLoad,

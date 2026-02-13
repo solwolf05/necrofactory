@@ -1,5 +1,5 @@
 (
-    id: "infusion_soul_to_infused_soul",
+    path: "infusion_soul_to_infused_soul",
     type: "infusion",
     inputs: [
         ("soul", 1),

@@ -1,4 +1,4 @@
-use bevy_modding::prelude::*;
+use crate::modding::types::Id;
 
 #[derive(Debug)]
 pub struct TileDef {

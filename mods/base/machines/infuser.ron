@@ -1,5 +1,5 @@
 (
-    id: "infuser",
+    path: "infuser",
     name: "Infuser",
     size: (1, 1),
     sprite: "red.png",

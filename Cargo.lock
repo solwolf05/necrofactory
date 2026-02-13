@@ -322,23 +322,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy-modding"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "serde",
-]
-
-[[package]]
-name = "bevy-modding-input"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy-modding",
- "serde",
-]
-
-[[package]]
 name = "bevy_a11y"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3111,8 +3094,6 @@ name = "necrofactory"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy-modding",
- "bevy-modding-input",
  "log",
  "rand",
  "ron",

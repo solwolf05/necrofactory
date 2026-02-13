@@ -1,9 +1,8 @@
 use std::{fmt::Display, hash::Hash};
 
 use bevy::prelude::*;
-use bevy_modding::prelude::Id;
 
-use crate::world::{CHUNK_SIZE, TILE_SIZE, tile::Tile};
+use crate::{modding::types::Id, world::tile::Tile};
 
 #[derive(Debug)]
 pub struct Chunk {

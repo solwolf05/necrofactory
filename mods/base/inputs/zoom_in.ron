@@ -1,5 +1,5 @@
 (
-    id: "zoom_in",
+    path: "zoom_in",
     name: "Zoom In",
     default: InputBinding (
         kind: KeyButton(KeyE),
