@@ -113,13 +113,62 @@ fn check_registries(inputs: Res<Registry<InputAction>>, tiles: Res<Registry<Tile
 
 #[derive(Debug, Default, Resource, Clone)]
 pub struct ModRegistry {
-    pub mods: HashMap<PathSegment, ModInfo>,
-    pub load_order: Vec<PathSegment>,
+    mods: Vec<(PathSegment, ModInfo)>,
+    lookup: HashMap<PathSegment, Id<ModInfo>>,
+    pub load_order: Vec<Id<ModInfo>>,
 }
 
 impl ModRegistry {
-    pub fn iter(&self) -> impl Iterator<Item = &ModInfo> {
-        self.load_order.iter().map(|id| self.mods.get(id).unwrap())
+    pub fn register(&mut self, segment: PathSegment, mod_info: ModInfo) -> Id<ModInfo> {
+        if let Some(id) = self.lookup.get(&segment).copied() {
+            self.mods[id.get() as usize].1 = mod_info;
+            return id;
+        }
+
+        let id = Id::new(self.mods.len() as u32);
+        self.mods.push((segment.clone(), mod_info));
+        self.lookup.insert(segment, id);
+
+        id
+    }
+
+    pub fn len(&self) -> usize {
+        self.mods.len()
+    }
+
+    pub fn lookup(&self, segment: &PathSegment) -> Option<Id<ModInfo>> {
+        self.lookup.get(&segment).copied()
+    }
+
+    pub fn resolve(&self, id: Id<ModInfo>) -> Option<&PathSegment> {
+        self.mods.get(id.get() as usize).map(|r| &r.0)
+    }
+
+    pub fn get(&self, id: Id<ModInfo>) -> Option<&ModInfo> {
+        self.mods.get(id.get() as usize).map(|r| &r.1)
+    }
+
+    pub fn get_by_segment(&self, segment: &PathSegment) -> Option<&ModInfo> {
+        self.lookup(segment).and_then(|id| self.get(id))
+    }
+
+    pub fn contains(&self, id: Id<ModInfo>) -> bool {
+        self.mods.len() > id.get() as usize
+    }
+
+    pub fn contains_path(&self, segment: &PathSegment) -> bool {
+        self.lookup.contains_key(segment)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&PathSegment, &ModInfo)> {
+        self.mods.iter().map(|(s, t)| (s, t))
+    }
+
+    pub fn iter_with_id(&self) -> impl Iterator<Item = (Id<ModInfo>, &PathSegment, &ModInfo)> {
+        self.mods
+            .iter()
+            .enumerate()
+            .map(|(i, (s, t))| (Id::new(i as u32), s, t))
     }
 }
 

@@ -3097,6 +3097,7 @@ dependencies = [
  "log",
  "rand",
  "ron",
+ "semver",
  "serde",
  "toml",
  "tracing",

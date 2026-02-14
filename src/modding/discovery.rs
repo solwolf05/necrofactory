@@ -33,7 +33,7 @@ pub fn discover_mods(
         };
 
         let mod_info = ModInfo { path, metadata };
-        mods.mods.insert(mod_info.metadata.id.clone(), mod_info);
+        mods.register(mod_info.metadata.id.clone(), mod_info);
     }
     info!("Mod discovery complete");
 

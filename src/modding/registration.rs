@@ -15,7 +15,7 @@ use serde::Deserialize;
 use crate::{
     input::{InputAction, InputBinding},
     modding::{
-        ModInfo, ModLoadState, ModRegistry,
+        Id, ModInfo, ModLoadState, ModRegistry,
         types::{Path as DefPath, PathSegment, Registry},
     },
     world::tile::TileDef,
@@ -25,8 +25,8 @@ const MAX_CONCURRENT_IO: usize = 64;
 
 #[derive(Debug, Default, Resource)]
 pub struct Pending {
-    pub inputs: VecDeque<(PathSegment, PathBuf)>,
-    pub tiles: VecDeque<(PathSegment, PathBuf)>,
+    pub inputs: VecDeque<(Id<ModInfo>, PathBuf)>,
+    pub tiles: VecDeque<(Id<ModInfo>, PathBuf)>,
 }
 
 impl Pending {
@@ -72,15 +72,15 @@ impl Complete {
 }
 
 pub fn discover_definitions(mods: Res<ModRegistry>, mut queue: ResMut<Pending>) {
-    for mod_info in mods.iter() {
-        queue.inputs.extend(read_mod_dir(mod_info, "inputs"));
-        queue.tiles.extend(read_mod_dir(mod_info, "tiles"));
+    for (id, _, mod_info) in mods.iter_with_id() {
+        queue.inputs.extend(read_mod_dir(id, mod_info, "inputs"));
+        queue.tiles.extend(read_mod_dir(id, mod_info, "tiles"));
     }
 }
 
-fn read_mod_dir(mod_info: &ModInfo, path: &str) -> Vec<(PathSegment, PathBuf)> {
+fn read_mod_dir(id: Id<ModInfo>, mod_info: &ModInfo, path: &str) -> Vec<(Id<ModInfo>, PathBuf)> {
     read_dir(&mod_info.path.join(path))
-        .map(|path| (mod_info.metadata.id.clone(), path))
+        .map(|path| (id, path))
         .collect()
 }
 
@@ -101,13 +101,13 @@ pub fn spawn_registration(
 
     while active.len() < MAX_CONCURRENT_IO {
         if let Some((mod_id, path)) = pending.inputs.pop_front() {
-            let mod_info = mods.mods.get(&mod_id).unwrap().clone();
+            let mod_info = mods.get(mod_id).unwrap().clone();
             active.inputs.push(pool.spawn(load_input(mod_info, path)));
             continue;
         }
 
         if let Some((mod_id, path)) = pending.tiles.pop_front() {
-            let mod_info = mods.mods.get(&mod_id).unwrap().clone();
+            let mod_info = mods.get(mod_id).unwrap().clone();
             active.tiles.push(pool.spawn(load_tile(mod_info, path)));
             continue;
         }

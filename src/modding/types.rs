@@ -11,7 +11,7 @@ use std::{
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct Registry<T> {
     definitions: Vec<(Path, T)>,
     lookup: HashMap<Path, Id<T>>,
@@ -39,6 +39,14 @@ impl<T> Registry<T> {
         self.lookup.insert(path, id);
 
         Some(id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.definitions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.definitions.is_empty()
     }
 
     /// Looks up the id of the definition associated with the given path.
