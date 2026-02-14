@@ -3,10 +3,7 @@ use bevy::{camera::ScalingMode, prelude::*, window::WindowResolution};
 use crate::{
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState},
-    modding::{
-        ModPlugin,
-        types::{Id, Registry},
-    },
+    modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry, TileHandles},
     world::{TILE_SIZE, World, WorldPlugin, WorldPosition},
     world_gen::WorldGenPlugin,
 };
@@ -21,6 +18,7 @@ mod world_gen;
 fn main() -> AppExit {
     App::new()
         .add_plugins((
+            ModAssetSourcePlugin,
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
@@ -63,7 +61,7 @@ fn boot(mut state: ResMut<NextState<AppState>>) {
     state.set(AppState::ModLoading);
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, sprites: Res<TileHandles>) {
     commands.spawn((
         Camera2d::default(),
         Projection::Orthographic(OrthographicProjection {
@@ -79,6 +77,13 @@ fn setup(mut commands: Commands) {
         Transform::default(),
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
     ));
+
+    for (&id, image) in sprites.complete.iter() {
+        commands.spawn((
+            Transform::from_translation(Vec3::new(id.get() as f32 * TILE_SIZE as f32, 0.0, 0.0)),
+            Sprite::from_image(image.clone()),
+        ));
+    }
 }
 
 #[derive(Component)]

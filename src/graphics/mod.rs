@@ -7,13 +7,15 @@ use bevy::{
 
 use crate::{
     AppState, Player,
-    modding::types::Id,
+    modding::{Id, Registry},
     world::{
         CHUNK_SIZE, TILE_SIZE, World, WorldPosition,
         chunk::{Chunk, TilePosition},
         tile::TileDef,
     },
 };
+
+mod atlas;
 
 pub struct GraphicsPlugin;
 
@@ -23,45 +25,6 @@ impl Plugin for GraphicsPlugin {
             .add_systems(PostUpdate, build_meshes.run_if(in_state(AppState::InGame)));
     }
 }
-
-// fn build_atlas_system(
-//     mut commands: Commands,
-//     mut registry: ResMut<Registry<TileDef>>,
-//     mut asset_server: Res<AssetServer>,
-//     mut images: ResMut<Assets<Image>>,
-//     mut layouts: ResMut<Assets<TextureAtlasLayout>>,
-//     mut materials: ResMut<Assets<ColorMaterial>>,
-// ) {
-//     // 1) Create a TextureAtlasBuilder and add all registered images
-//     let mut builder = TextureAtlasBuilder::default();
-
-//     let mut handles = Vec::new();
-//     for (_, tile) in registry.iter() {
-//         handles.push(asset_server.load(tile.sprite_path));
-//     }
-//     for handle in handles {
-//         let image = images.get(&handle).unwrap();
-//         builder.add_texture(None, image);
-//     }
-
-//     // 2) build atlas (packer does the work). returns (layout, sources, image)
-//     let (atlas_layout, _sources, atlas_image) = builder.build().expect("atlas build failed");
-
-//     // 3) add image & layout into asset storage
-//     let atlas_image_handle = images.add(atlas_image);
-//     let atlas_layout_handle = layouts.add(atlas_layout);
-
-//     // 4) create a ColorMaterial that uses the atlas image
-//     let material_handle = materials.add(ColorMaterial::from(atlas_image_handle.clone()));
-
-//     commands.insert_resource(Atlas {
-//         image_handle: atlas_image_handle,
-//         layout_handle: atlas_layout_handle,
-//         material_handle,
-//     });
-
-//     // registry can be dropped or kept for metadata mapping (tile id -> index)
-// }
 
 fn build_meshes(
     mut meshes: ResMut<Assets<Mesh>>,

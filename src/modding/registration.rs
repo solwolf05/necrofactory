@@ -187,7 +187,7 @@ async fn load_input(
     let string = fs::read_to_string(&path)?;
     let raw: RawInputAction = ron::from_str(&string)?;
 
-    let def_path = mod_info.metadata.id.join(raw.path).unwrap(); // Both paths have already been validated
+    let def_path = mod_info.metadata.id.join(raw.path);
 
     Ok((
         def_path,
@@ -211,7 +211,7 @@ async fn load_tile(
     let string = fs::read_to_string(&path)?;
     let raw: RawTileDef = ron::from_str(&string)?;
 
-    let def_path = mod_info.metadata.id.join(raw.path).unwrap(); // Both paths have already been validated
+    let def_path = mod_info.metadata.id.join(raw.path);
 
     Ok((
         def_path,

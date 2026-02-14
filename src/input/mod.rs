@@ -7,10 +7,7 @@ use bevy::{
 
 use serde::Deserialize;
 
-use crate::modding::{
-    ModLoadState,
-    types::{Id, Registry},
-};
+use crate::modding::{Id, ModLoadState, Registry};
 
 pub struct InputPlugin;
 

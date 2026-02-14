@@ -1,4 +1,4 @@
-use crate::modding::types::Id;
+use crate::modding::Id;
 
 #[derive(Debug)]
 pub struct TileDef {

@@ -12,25 +12,28 @@ use crate::{
     AppState,
     input::InputAction,
     modding::{
-        asset_loading::load_assets,
+        asset_loading::{begin_asset_loading, check_assets_loaded},
         discovery::discover_mods,
         finalization::finalize,
         registration::{
             Active, Complete, Pending, check_registries_loaded, discover_definitions,
             log_registration, poll_registration, spawn_registration,
         },
-        types::{PathSegment, Registry},
         validation::validate_mods,
     },
     world::tile::TileDef,
 };
 
+pub use asset_loading::TileHandles;
+
 mod asset_loading;
 mod discovery;
 mod finalization;
 mod registration;
-pub mod types;
+mod types;
 mod validation;
+
+pub use types::{Id, Path, PathSegment, Registry};
 
 /// Loads mods at the start of the game and registers their types in the registry.
 pub struct ModPlugin;
@@ -42,6 +45,7 @@ impl Plugin for ModPlugin {
             .init_resource::<Pending>()
             .init_resource::<Active>()
             .init_resource::<Complete>()
+            .init_resource::<TileHandles>()
             .init_resource::<Registry<InputAction>>()
             .init_resource::<Registry<TileDef>>()
             .add_systems(OnEnter(ModLoadState::Discover), discover_mods)
@@ -57,10 +61,20 @@ impl Plugin for ModPlugin {
                 )
                     .run_if(in_state(ModLoadState::Register)),
             )
-            .add_systems(OnEnter(ModLoadState::LoadAssets), load_assets)
+            .add_systems(OnEnter(ModLoadState::LoadAssets), begin_asset_loading)
+            .add_systems(
+                Update,
+                check_assets_loaded.run_if(in_state(ModLoadState::LoadAssets)),
+            )
             .add_systems(OnEnter(ModLoadState::Finalize), finalize)
             .add_systems(OnEnter(ModLoadState::Finalize), check_registries);
+    }
+}
 
+pub struct ModAssetSourcePlugin;
+
+impl Plugin for ModAssetSourcePlugin {
+    fn build(&self, app: &mut App) {
         app.register_asset_source(
             AssetSourceId::Name("mods".into()),
             AssetSourceBuilder::new(|| Box::new(FileAssetReader::new(mods_path()))),

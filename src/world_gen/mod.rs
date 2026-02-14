@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     AppState, Player,
-    modding::types::Id,
+    modding::Id,
     world::{
         World, WorldPosition,
         chunk::{Chunk, TilePosition},

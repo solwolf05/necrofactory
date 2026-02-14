@@ -104,7 +104,7 @@ impl<T> Default for Registry<T> {
     }
 }
 
-/// A id to an definition in a registry.
+/// A id to a definition in a registry.
 pub struct Id<T>(u32, PhantomData<T>);
 
 impl<T> Id<T> {
@@ -175,9 +175,8 @@ impl PathSegment {
         is_valid_segment(segment).then(|| Self(segment.into()))
     }
 
-    pub fn join(&self, other: impl TryInto<Path>) -> Option<Path> {
-        let other = other.try_into().ok()?;
-        Some(Path(format!("{}::{}", self, other)))
+    pub fn join(&self, other: Path) -> Path {
+        Path(format!("{}::{}", self, other))
     }
 }
 
@@ -249,9 +248,8 @@ impl Path {
         Self::new(&format!("{}::{}", namespace, path))
     }
 
-    pub fn join(&self, other: impl TryInto<Path>) -> Option<Self> {
-        let other = other.try_into().ok()?;
-        Some(Self(format!("{}::{}", self, other)))
+    pub fn join(&self, other: Path) -> Path {
+        Self(format!("{}::{}", self, other))
     }
 
     pub fn segments(&self) -> impl Iterator<Item = &str> {

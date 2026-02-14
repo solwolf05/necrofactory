@@ -2,7 +2,7 @@ use std::{fmt::Display, hash::Hash};
 
 use bevy::prelude::*;
 
-use crate::{modding::types::Id, world::tile::Tile};
+use crate::{modding::Id, world::tile::Tile};
 
 #[derive(Debug)]
 pub struct Chunk {
