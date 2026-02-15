@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use bevy::{math::I64Vec2, prelude::*};
 
@@ -114,5 +114,11 @@ impl WorldPosition {
 
     pub fn to_xy(&self) -> I64Vec2 {
         I64Vec2::new(self.x(), self.y())
+    }
+}
+
+impl Display for WorldPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x(), self.y())
     }
 }

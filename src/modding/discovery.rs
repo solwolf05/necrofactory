@@ -32,7 +32,13 @@ pub fn discover_mods(
             }
         };
 
-        let mod_info = ModInfo { path, metadata };
+        let enabled = !path.join("disabled").exists();
+        let mod_info = ModInfo {
+            path,
+            metadata,
+            enabled,
+        };
+
         mods.register(mod_info.metadata.id.clone(), mod_info);
     }
     info!("Mod discovery complete");

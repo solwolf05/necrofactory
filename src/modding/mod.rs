@@ -1,5 +1,6 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::fmt::{Debug, Display};
+use std::path::{Path, PathBuf};
+use std::{collections::HashMap, fs};
 
 use bevy::{
     asset::io::{AssetSourceBuilder, AssetSourceId, file::FileAssetReader},
@@ -33,7 +34,7 @@ mod registration;
 mod types;
 mod validation;
 
-pub use types::{Id, Path, PathSegment, Registry};
+pub use types::{Id, PathSegment, Registry};
 
 /// Loads mods at the start of the game and registers their types in the registry.
 pub struct ModPlugin;
@@ -50,6 +51,7 @@ impl Plugin for ModPlugin {
             .init_resource::<Registry<TileDef>>()
             .add_systems(OnEnter(ModLoadState::Discover), discover_mods)
             .add_systems(OnEnter(ModLoadState::Validate), validate_mods)
+            .add_systems(OnExit(ModLoadState::Validate), check_mods)
             .add_systems(OnEnter(ModLoadState::Register), discover_definitions)
             .add_systems(
                 Update,
@@ -111,7 +113,19 @@ fn check_registries(inputs: Res<Registry<InputAction>>, tiles: Res<Registry<Tile
     info!("Tiles:\n{:?}", *tiles);
 }
 
-#[derive(Debug, Default, Resource, Clone)]
+fn check_mods(mods: Res<ModRegistry>) {
+    info!("Mods:\n{}", *mods);
+    info!(
+        "Mod load order: {}",
+        mods.load_order
+            .iter()
+            .map(|&id| mods.resolve(id).unwrap().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+#[derive(Default, Resource, Clone)]
 pub struct ModRegistry {
     mods: Vec<(PathSegment, ModInfo)>,
     lookup: HashMap<PathSegment, Id<ModInfo>>,
@@ -132,6 +146,30 @@ impl ModRegistry {
         id
     }
 
+    pub fn enable(&mut self, id: Id<ModInfo>) {
+        if let Some(mod_info) = self.get_mut(id) {
+            mod_info.enable();
+        }
+    }
+
+    pub fn enable_segment(&mut self, segment: &PathSegment) {
+        if let Some(mod_info) = self.get_by_segment_mut(segment) {
+            mod_info.enable();
+        }
+    }
+
+    pub fn disable(&mut self, id: Id<ModInfo>) {
+        if let Some(mod_info) = self.get_mut(id) {
+            mod_info.disable();
+        }
+    }
+
+    pub fn disable_segment(&mut self, segment: &PathSegment) {
+        if let Some(mod_info) = self.get_by_segment_mut(segment) {
+            mod_info.disable();
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.mods.len()
     }
@@ -148,8 +186,16 @@ impl ModRegistry {
         self.mods.get(id.get() as usize).map(|r| &r.1)
     }
 
+    fn get_mut(&mut self, id: Id<ModInfo>) -> Option<&mut ModInfo> {
+        self.mods.get_mut(id.get() as usize).map(|r| &mut r.1)
+    }
+
     pub fn get_by_segment(&self, segment: &PathSegment) -> Option<&ModInfo> {
         self.lookup(segment).and_then(|id| self.get(id))
+    }
+
+    pub fn get_by_segment_mut(&mut self, segment: &PathSegment) -> Option<&mut ModInfo> {
+        self.lookup(segment).and_then(|id| self.get_mut(id))
     }
 
     pub fn contains(&self, id: Id<ModInfo>) -> bool {
@@ -172,10 +218,105 @@ impl ModRegistry {
     }
 }
 
+impl Debug for ModRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (id, segment, mod_info) in self.iter_with_id() {
+            writeln!(f, "{} {}: {:?}", id.get(), segment, mod_info)?;
+        }
+        Ok(())
+    }
+}
+
+impl Display for ModRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (id, segment, mod_info) in self.iter_with_id() {
+            writeln!(f, "{} {}: {}", id.get(), segment, mod_info)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ModInfo {
-    pub path: PathBuf,
-    pub metadata: ModMetadata,
+    path: PathBuf,
+    metadata: ModMetadata,
+    enabled: bool,
+}
+
+impl ModInfo {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn id(&self) -> &PathSegment {
+        &self.metadata.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.metadata.name
+    }
+
+    pub fn version(&self) -> &str {
+        &self.metadata.version
+    }
+
+    pub fn author(&self) -> &str {
+        &self.metadata.author
+    }
+
+    pub fn dependencies(&self) -> &HashMap<PathSegment, String> {
+        &self.metadata.dependencies
+    }
+
+    pub fn optional_dependencies(&self) -> &HashMap<PathSegment, String> {
+        &self.metadata.optional_dependencies
+    }
+
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn enable(&mut self) {
+        let _ = fs::remove_file(self.disable_path());
+        self.enabled = true;
+    }
+
+    pub fn disable(&mut self) {
+        let _ = fs::write(self.disable_path(), []);
+        self.enabled = false;
+    }
+
+    pub fn disable_path(&self) -> PathBuf {
+        self.path.join("disabled")
+    }
+}
+
+impl Display for ModInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} by {}; dependencies: {}; optional dependencies: {}; path: {}; {}",
+            self.name(),
+            self.version(),
+            self.author(),
+            self.dependencies()
+                .into_iter()
+                .map(|(i, v)| format!("{} {}", i, v))
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.optional_dependencies()
+                .into_iter()
+                .map(|(i, v)| format!("{} {}", i, v))
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.path().display(),
+            if self.enabled() {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        )
+    }
 }
 
 #[derive(Debug, Clone)]

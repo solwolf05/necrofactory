@@ -1,6 +1,7 @@
 use bevy::{camera::ScalingMode, prelude::*, window::WindowResolution};
 
 use crate::{
+    debug::DebugPlugin,
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState},
     modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry, TileHandles},
@@ -12,6 +13,7 @@ mod graphics;
 mod input;
 mod modding;
 // mod serialization;
+mod debug;
 mod world;
 mod world_gen;
 
@@ -35,6 +37,7 @@ fn main() -> AppExit {
             WorldGenPlugin,
             GraphicsPlugin,
             InputPlugin,
+            DebugPlugin,
         ))
         .insert_state(AppState::Boot)
         .add_systems(OnEnter(AppState::Boot), boot)

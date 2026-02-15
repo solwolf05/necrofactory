@@ -97,7 +97,16 @@ impl<T> Registry<T> {
 impl<T: Debug> Debug for Registry<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (id, path, definition) in self.iter_with_id() {
-            writeln!(f, "{} {}: {:?}", id.0, path, definition)?;
+            writeln!(f, "{} {}: {:?}", id.get(), path, definition)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: Display> Display for Registry<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (id, path, definition) in self.iter_with_id() {
+            writeln!(f, "{} {}: {}", id.get(), path, definition)?;
         }
         Ok(())
     }
