@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    env,
+    time::Instant,
 };
 
 use bevy::prelude::*;
@@ -175,9 +175,10 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
         if let Some(mod_info) = registry.get(id) {
             for (dep_segment, _) in mod_info.dependencies() {
                 let Some(dep_id) = registry.lookup(dep_segment) else {
-                    if env::var("NODISABLE").is_ok() {
-                        continue;
-                    }
+                    #[cfg(feature = "no_disable")]
+                    continue;
+
+                    #[cfg(not(feature = "no_disable"))]
                     unreachable!("should have already been validated");
                 };
 
@@ -326,18 +327,18 @@ pub fn validate_mods(
     mut next_state: ResMut<NextState<ModLoadState>>,
     mut mods: ResMut<ModRegistry>,
 ) {
-    if env::var("NODISABLE").is_ok() {
-        info!("NODISABLE is true");
-    }
+    #[cfg(feature = "no_disable")]
+    info!("NODISABLE is true");
+
+    let instant = Instant::now();
 
     if let Err(dep_errors) = validate_dependencies(&mods) {
         for error in dep_errors {
-            if env::var("NODISABLE").is_err() {
-                error
-                    .mods()
-                    .into_iter()
-                    .for_each(|segment| mods.disable_segment(segment));
-            }
+            #[cfg(not(feature = "no_disable"))]
+            error
+                .mods()
+                .into_iter()
+                .for_each(|segment| mods.disable_segment(segment));
 
             error!("Validation error: {}", error);
         }
@@ -345,12 +346,11 @@ pub fn validate_mods(
 
     if let Err(cycle_errors) = detect_cycles(&mods) {
         for error in cycle_errors {
-            if env::var("NODISABLE").is_err() {
-                error
-                    .mods()
-                    .into_iter()
-                    .for_each(|segment| mods.disable_segment(segment));
-            }
+            #[cfg(not(feature = "no_disable"))]
+            error
+                .mods()
+                .into_iter()
+                .for_each(|segment| mods.disable_segment(segment));
 
             error!("Validation error: {}", error);
         }
@@ -359,17 +359,24 @@ pub fn validate_mods(
     match topological_sort(&mods) {
         Ok(order) => {
             mods.load_order = order;
+
+            let elapsed = instant.elapsed();
+
+            #[cfg(feature = "time")]
+            info!("Mod validation complete ({}ms)", elapsed.as_millis_f32());
+
+            #[cfg(not(feature = "time"))]
             info!("Mod validation complete");
+
             next_state.set(ModLoadState::Register);
         }
         Err(errors) => {
             for error in errors {
-                if env::var("NODISABLE").is_err() {
-                    error
-                        .mods()
-                        .into_iter()
-                        .for_each(|segment| mods.disable_segment(segment));
-                }
+                #[cfg(not(feature = "no_disable"))]
+                error
+                    .mods()
+                    .into_iter()
+                    .for_each(|segment| mods.disable_segment(segment));
 
                 error!("Validation error: {}", error);
             }

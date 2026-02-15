@@ -1,3 +1,5 @@
+#![feature(duration_millis_float)]
+
 use bevy::{camera::ScalingMode, prelude::*, window::WindowResolution};
 
 use crate::{

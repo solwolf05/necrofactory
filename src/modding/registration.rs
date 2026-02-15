@@ -4,6 +4,7 @@ use std::{
     fmt::Display,
     fs,
     path::{Path, PathBuf},
+    time::Instant,
 };
 
 use bevy::{
@@ -16,7 +17,7 @@ use crate::{
     input::{InputAction, InputBinding},
     modding::{
         Id, ModInfo, ModLoadState, ModRegistry,
-        types::{Path as DefPath, PathSegment, Registry},
+        types::{Path as DefPath, Registry},
     },
     world::tile::TileDef,
 };
@@ -61,6 +62,9 @@ pub struct Complete {
     pub tiles: usize,
 }
 
+#[derive(Resource)]
+pub struct RegistrationInstant(Instant);
+
 impl Complete {
     pub fn len(&self) -> usize {
         self.inputs + self.tiles
@@ -71,10 +75,14 @@ impl Complete {
     }
 }
 
-pub fn discover_definitions(mods: Res<ModRegistry>, mut queue: ResMut<Pending>) {
+pub fn start_time(mut commands: Commands) {
+    commands.insert_resource(RegistrationInstant(Instant::now()));
+}
+
+pub fn discover_definitions(mods: Res<ModRegistry>, mut pending: ResMut<Pending>) {
     for (id, _, mod_info) in mods.iter_with_id() {
-        queue.inputs.extend(read_mod_dir(id, mod_info, "inputs"));
-        queue.tiles.extend(read_mod_dir(id, mod_info, "tiles"));
+        pending.inputs.extend(read_mod_dir(id, mod_info, "inputs"));
+        pending.tiles.extend(read_mod_dir(id, mod_info, "tiles"));
     }
 }
 

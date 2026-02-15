@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, time::Instant};
 
 use bevy::prelude::*;
 
@@ -8,6 +8,8 @@ pub fn discover_mods(
     mut next_state: ResMut<NextState<ModLoadState>>,
     mut mods: ResMut<ModRegistry>,
 ) {
+    let instant = Instant::now();
+
     let entries = match fs::read_dir(mods_path()) {
         Ok(e) => e.flatten(),
         Err(e) => {
@@ -41,6 +43,13 @@ pub fn discover_mods(
 
         mods.register(mod_info.metadata.id.clone(), mod_info);
     }
+
+    let elapsed = instant.elapsed();
+
+    #[cfg(feature = "time")]
+    info!("Mod discovery complete ({}ms)", elapsed.as_millis_f32());
+
+    #[cfg(not(feature = "time"))]
     info!("Mod discovery complete");
 
     next_state.set(ModLoadState::Validate);
