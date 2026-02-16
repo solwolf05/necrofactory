@@ -4,10 +4,10 @@ use bevy::{camera::ScalingMode, prelude::*, window::WindowResolution};
 
 use crate::{
     debug::DebugPlugin,
-    graphics::GraphicsPlugin,
+    graphics::{GraphicsPlugin, atlas::TextureAtlasMap},
     input::{InputAction, InputPlugin, InputState},
-    modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry, TileHandles},
-    world::{TILE_SIZE, World, WorldPlugin, WorldPosition},
+    modding::{Id, ModAssetSourcePlugin, ModLoadState, ModPlugin, Registry, TileHandles},
+    world::{BaseChunk, RebaseSet, TILE_SIZE, World, WorldPlugin, WorldPosition, WorldTransform},
     world_gen::WorldGenPlugin,
 };
 
@@ -16,6 +16,7 @@ mod input;
 mod modding;
 // mod serialization;
 mod debug;
+mod player;
 mod world;
 mod world_gen;
 
@@ -47,7 +48,17 @@ fn main() -> AppExit {
         .add_systems(Update, esc_exit)
         .add_systems(
             Update,
-            (camera_follow, player_move, zoom, toggle_tile).run_if(in_state(AppState::InGame)),
+            (zoom, toggle_tile).run_if(in_state(AppState::InGame)),
+        )
+        .add_systems(
+            Update,
+            (player_move, player_follow).run_if(in_state(AppState::InGame)),
+        )
+        .add_systems(
+            PostUpdate,
+            camera_follow
+                .after(RebaseSet)
+                .run_if(in_state(AppState::InGame)),
         )
         .run()
 }
@@ -79,16 +90,9 @@ fn setup(mut commands: Commands, sprites: Res<TileHandles>) {
 
     commands.spawn((
         Player,
-        Transform::default(),
+        WorldTransform::default(),
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
     ));
-
-    for (&id, image) in sprites.complete.iter() {
-        commands.spawn((
-            Transform::from_translation(Vec3::new(id.get() as f32 * TILE_SIZE as f32, 0.0, 0.0)),
-            Sprite::from_image(image.clone()),
-        ));
-    }
 }
 
 #[derive(Component)]
@@ -102,9 +106,16 @@ fn camera_follow(
     camera.single_mut().unwrap().translation = player.single().unwrap().translation;
 }
 
+fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<BaseChunk>) {
+    let world_transform = player.single().unwrap();
+    if world_transform.chunk != base.0 {
+        base.0 = world_transform.chunk;
+    }
+}
+
 fn player_move(
     time: Res<Time>,
-    mut player: Query<&mut Transform, With<Player>>,
+    mut player: Query<&mut WorldTransform, With<Player>>,
     input: Res<InputState>,
     registry: Res<Registry<InputAction>>,
 ) {
@@ -122,8 +133,7 @@ fn player_move(
         true => 32.0,
     };
 
-    transform.translation +=
-        axes.normalize_or_zero().extend(0.0) * speed * time.delta_secs() * TILE_SIZE as f32;
+    *transform += axes.normalize_or_zero() * speed * time.delta_secs();
 }
 
 fn zoom(
@@ -147,11 +157,11 @@ fn zoom(
 
 fn toggle_tile(
     mut world: ResMut<World>,
-    player: Query<&Transform, With<Player>>,
+    player: Query<&WorldTransform, With<Player>>,
     input: Res<InputState>,
     registry: Res<Registry<InputAction>>,
 ) {
-    let player_pos = WorldPosition::from_bevy(player.single().unwrap().translation);
+    let player_pos = player.single().unwrap().clone().into();
     if input.just_pressed(registry.lookup("base::toggle").unwrap()) {
         let tile = world.get_tile_mut(player_pos).unwrap();
         if tile.id == Id::ZERO {

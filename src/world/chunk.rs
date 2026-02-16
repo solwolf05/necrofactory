@@ -46,16 +46,18 @@ impl Chunk {
 pub struct TilePosition(u8);
 
 impl TilePosition {
+    pub const ZERO: Self = Self(0);
+
     pub fn new(value: u8) -> Self {
         Self(value)
     }
 
-    pub fn from_xy(x: u8, y: u8) -> Option<Self> {
+    pub fn from_xy(x: u8, y: u8) -> Self {
         if x >= 16 || y >= 16 {
-            return None;
+            panic!("tile coordinates out of bounds: ({}, {})", x, y);
         }
 
-        Some(Self(x + y * 16))
+        Self(x + y * 16)
     }
 
     pub fn x(&self) -> u8 {

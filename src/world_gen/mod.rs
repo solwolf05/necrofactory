@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    AppState, Player,
+    AppState,
     modding::Id,
     world::{
-        World, WorldPosition,
+        BaseChunk, World,
         chunk::{Chunk, TilePosition},
         tile::Tile,
     },
@@ -28,12 +28,11 @@ pub fn dev_gen(world: ResMut<World>) {
     }
 }
 
-pub fn dynamic_gen(world: ResMut<World>, player: Query<&Transform, With<Player>>) {
-    let player_chunk = WorldPosition::from_bevy(player.single().unwrap().translation).chunk;
+pub fn dynamic_gen(world: ResMut<World>, base: Res<BaseChunk>) {
     let world = world.into_inner();
     for cy in -8..=8 {
         for cx in -8..=8 {
-            let chunk_pos = player_chunk + IVec2::new(cx, cy);
+            let chunk_pos = base.0 + IVec2::new(cx, cy);
             if !world.contains_chunk(chunk_pos) {
                 test_gen_chunk(world, chunk_pos);
             }

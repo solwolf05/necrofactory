@@ -3,26 +3,34 @@ use bevy::{
     mesh::{Indices, PrimitiveTopology},
     platform::collections::HashSet,
     prelude::*,
+    sprite_render::Material2dPlugin,
 };
 
 use crate::{
     AppState, Player,
-    modding::{Id, Registry},
+    graphics::atlas::{TextureAtlasMap, TilemapMaterial, build_texture_atlas},
+    modding::{Id, ModLoadState, Registry},
     world::{
-        CHUNK_SIZE, TILE_SIZE, World, WorldPosition,
+        BaseChunk, CHUNK_SIZE, RebaseSet, TILE_SIZE, World, WorldPosition, WorldTransform,
         chunk::{Chunk, TilePosition},
         tile::TileDef,
     },
 };
 
-mod atlas;
+pub mod atlas;
 
 pub struct GraphicsPlugin;
 
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, spawn_test_chunks.run_if(in_state(AppState::InGame)))
-            .add_systems(PostUpdate, build_meshes.run_if(in_state(AppState::InGame)));
+        app.add_plugins(Material2dPlugin::<TilemapMaterial>::default())
+            .add_systems(OnEnter(ModLoadState::Finalize), build_texture_atlas)
+            .add_systems(
+                PostUpdate,
+                (spawn_chunks.before(RebaseSet), build_meshes)
+                    .chain()
+                    .run_if(in_state(AppState::InGame)),
+            );
     }
 }
 
@@ -30,7 +38,9 @@ fn build_meshes(
     mut meshes: ResMut<Assets<Mesh>>,
     mut query: Query<(&RenderChunk, &mut Mesh2d)>,
     mut world: ResMut<World>,
+    atlas: Res<TextureAtlasMap>,
 ) {
+    let atlas = atlas.into_inner();
     for (render_chunk, mut mesh2d) in query.iter_mut() {
         let Some(chunk) = world.get_chunk_mut(render_chunk.0) else {
             continue;
@@ -40,14 +50,14 @@ fn build_meshes(
             continue;
         }
 
-        let mesh = build_chunk_mesh(chunk);
+        let mesh = build_chunk_mesh(chunk, atlas);
         *mesh2d = Mesh2d(meshes.add(mesh));
 
         chunk.dirty = false;
     }
 }
 
-fn build_chunk_mesh(chunk: &Chunk) -> Mesh {
+fn build_chunk_mesh(chunk: &Chunk, atlas: &TextureAtlasMap) -> Mesh {
     let mut positions = Vec::new();
     let mut uvs = Vec::new();
     let mut indices = Vec::new();
@@ -56,7 +66,7 @@ fn build_chunk_mesh(chunk: &Chunk) -> Mesh {
 
     for y in 0..CHUNK_SIZE {
         for x in 0..CHUNK_SIZE {
-            let tile = chunk.get(TilePosition::from_xy(x as u8, y as u8).unwrap());
+            let tile = chunk.get(TilePosition::from_xy(x as u8, y as u8));
             if tile.id == Id::ZERO {
                 continue;
             }
@@ -73,7 +83,23 @@ fn build_chunk_mesh(chunk: &Chunk) -> Mesh {
             ]);
 
             // TEMP UVs (replace with atlas math later)
-            uvs.extend_from_slice(&[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+            // uvs.extend_from_slice(&[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+
+            let rect = match atlas.rect(tile.id) {
+                Some(r) => r,
+                None => continue,
+            };
+
+            let min = rect.min;
+            let max = rect.max;
+
+            // IMPORTANT: Bevy UV origin is bottom-left
+            uvs.extend_from_slice(&[
+                [min.x, max.y],
+                [max.x, max.y],
+                [max.x, min.y],
+                [min.x, min.y],
+            ]);
 
             indices.extend_from_slice(&[
                 index_offset,
@@ -99,22 +125,19 @@ fn build_chunk_mesh(chunk: &Chunk) -> Mesh {
     mesh
 }
 
-fn spawn_test_chunks(
+fn spawn_chunks(
     mut commands: Commands,
-    player: Query<&Transform, With<Player>>,
+    base: Res<BaseChunk>,
     render_chunks: Query<(Entity, &RenderChunk)>,
     world: Res<World>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    atlas: Res<TextureAtlasMap>,
 ) {
-    // Get player position
-    let player_transform = player.single().unwrap();
-    let player_chunk = WorldPosition::from_bevy(player_transform.translation).chunk;
-
     // Calculate which chunks should be loaded (3x3 area)
     let mut chunks_to_load = Vec::new();
     for cy in -1..=1 {
         for cx in -1..=1 {
-            let chunk_pos = player_chunk + IVec2::new(cx, cy);
+            let chunk_pos = base.0 + IVec2::new(cx, cy);
             chunks_to_load.push(chunk_pos);
         }
     }
@@ -138,21 +161,11 @@ fn spawn_test_chunks(
                 continue;
             };
 
-            let world_pos = Vec3::new(
-                chunk_pos.x as f32 * CHUNK_SIZE as f32 * TILE_SIZE as f32,
-                chunk_pos.y as f32 * CHUNK_SIZE as f32 * TILE_SIZE as f32,
-                0.0,
-            );
-
             commands.spawn((
                 RenderChunk(chunk_pos, true),
                 Mesh2d::default(),
-                MeshMaterial2d(materials.add(ColorMaterial::from_color(Color::hsl(
-                    rand::random::<f32>() * 360.0,
-                    1.0,
-                    0.5,
-                )))),
-                Transform::from_translation(world_pos),
+                MeshMaterial2d(atlas.material.clone()),
+                WorldTransform::from_chunk(chunk_pos),
             ));
         }
     }
@@ -160,5 +173,5 @@ fn spawn_test_chunks(
 
 #[derive(Component)]
 #[require(Mesh2d)]
-#[require(MeshMaterial2d<ColorMaterial>)]
+#[require(MeshMaterial2d<TilemapMaterial>)]
 pub struct RenderChunk(pub IVec2, pub bool);

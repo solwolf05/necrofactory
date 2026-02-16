@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::{AppState, Player, world::WorldPosition};
+use crate::{
+    AppState, Player,
+    world::{WorldPosition, WorldTransform},
+};
 
 pub struct DebugPlugin;
 
@@ -44,7 +47,7 @@ fn setup(mut commands: Commands) {
 }
 
 fn update_text(
-    player: Query<&Transform, With<Player>>,
+    player: Query<&WorldTransform, With<Player>>,
     mut world: Query<&mut TextSpan, With<WorldPosText>>,
     mut chunk: Query<&mut TextSpan, (With<ChunkPosText>, Without<WorldPosText>)>,
     mut tile: Query<
@@ -61,11 +64,11 @@ fn update_text(
     let mut chunk = chunk.single_mut().unwrap();
     let mut tile = tile.single_mut().unwrap();
 
-    let world_pos = WorldPosition::from_bevy(player.translation);
+    let world_pos = player;
     let chunk_pos = world_pos.chunk;
     let tile_pos = world_pos.tile;
 
-    world.0 = format!("World: {}\n", world_pos);
+    world.0 = format!("World: {:.2}\n", world_pos);
     chunk.0 = format!("Chunk: {}\n", chunk_pos);
-    tile.0 = format!("Tile: {}\n", tile_pos);
+    tile.0 = format!("Tile: {:.2}\n", tile_pos);
 }
