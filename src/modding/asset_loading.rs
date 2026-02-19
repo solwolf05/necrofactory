@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[derive(Debug, Default, Resource)]
-pub struct TileHandles {
+pub struct TileSprites {
     pub(self) missing: Handle<Image>,
     pub pending: HashMap<Id<TileDef>, Handle<Image>>,
     pub complete: HashMap<Id<TileDef>, Handle<Image>>,
@@ -17,7 +17,7 @@ pub struct TileHandles {
 
 pub fn begin_asset_loading(
     tiles: Res<Registry<TileDef>>,
-    mut handles: ResMut<TileHandles>,
+    mut handles: ResMut<TileSprites>,
     asset_server: Res<AssetServer>,
 ) {
     let missing = asset_server.load("missing.png");
@@ -30,7 +30,7 @@ pub fn begin_asset_loading(
 
 pub fn check_assets_loaded(
     mut next_state: ResMut<NextState<ModLoadState>>,
-    mut handles: ResMut<TileHandles>,
+    mut handles: ResMut<TileSprites>,
     registry: Res<Registry<TileDef>>,
     asset_server: Res<AssetServer>,
 ) {

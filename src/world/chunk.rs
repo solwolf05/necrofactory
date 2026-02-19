@@ -37,6 +37,15 @@ impl Chunk {
         self.dirty = true;
         &mut self.tiles[position.0 as usize]
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Tile> {
+        self.tiles.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Tile> {
+        self.dirty = true;
+        self.tiles.iter_mut()
+    }
 }
 
 /// A tile's position within a chunk.
@@ -77,5 +86,13 @@ impl Display for TilePosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (x, y) = self.to_xy();
         write!(f, "({}, {})", x, y)
+    }
+}
+
+impl From<TilePosition> for Vec2 {
+    fn from(value: TilePosition) -> Self {
+        let x = value.x() as f32;
+        let y = value.y() as f32;
+        Vec2::new(x, y)
     }
 }

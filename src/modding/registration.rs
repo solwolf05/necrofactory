@@ -62,9 +62,6 @@ pub struct Complete {
     pub tiles: usize,
 }
 
-#[derive(Resource)]
-pub struct RegistrationInstant(Instant);
-
 impl Complete {
     pub fn len(&self) -> usize {
         self.inputs + self.tiles
@@ -73,10 +70,6 @@ impl Complete {
     pub fn is_empty(&self) -> bool {
         self.inputs == 0 && self.tiles == 0
     }
-}
-
-pub fn start_time(mut commands: Commands) {
-    commands.insert_resource(RegistrationInstant(Instant::now()));
 }
 
 pub fn discover_definitions(mods: Res<ModRegistry>, mut pending: ResMut<Pending>) {

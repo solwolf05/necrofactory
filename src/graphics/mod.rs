@@ -1,47 +1,31 @@
-use bevy::{
-    asset::RenderAssetUsages,
-    mesh::{Indices, PrimitiveTopology},
-    platform::collections::HashSet,
-    prelude::*,
-    sprite_render::Material2dPlugin,
-};
+use bevy::{platform::collections::HashSet, prelude::*};
 
 use crate::{
-    AppState, Player,
-    graphics::atlas::{TextureAtlasMap, TilemapMaterial, build_texture_atlas},
-    modding::{Id, ModLoadState, Registry},
-    world::{
-        BaseChunk, CHUNK_SIZE, RebaseSet, TILE_SIZE, World, WorldPosition, WorldTransform,
-        chunk::{Chunk, TilePosition},
-        tile::TileDef,
-    },
+    AppState,
+    modding::{Id, TileSprites},
+    world::{BaseChunk, RebaseSet, World, WorldTransform, chunk::TilePosition},
 };
-
-pub mod atlas;
 
 pub struct GraphicsPlugin;
 
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(Material2dPlugin::<TilemapMaterial>::default())
-            .add_systems(OnEnter(ModLoadState::Finalize), build_texture_atlas)
-            .add_systems(
-                PostUpdate,
-                (spawn_chunks.before(RebaseSet), build_meshes)
-                    .chain()
-                    .run_if(in_state(AppState::InGame)),
-            );
+        app.add_systems(
+            PostUpdate,
+            (spawn_chunks.before(RebaseSet), update_sprites)
+                .chain()
+                .run_if(in_state(AppState::InGame)),
+        );
     }
 }
 
-fn build_meshes(
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut query: Query<(&RenderChunk, &mut Mesh2d)>,
+fn update_sprites(
+    mut chunks: Query<(&mut RenderChunk, &mut Children)>,
+    mut tiles: Query<(&RenderTile, &mut Sprite, &mut Visibility)>,
     mut world: ResMut<World>,
-    atlas: Res<TextureAtlasMap>,
+    sprites: Res<TileSprites>,
 ) {
-    let atlas = atlas.into_inner();
-    for (render_chunk, mut mesh2d) in query.iter_mut() {
+    for (mut render_chunk, children) in chunks.iter_mut() {
         let Some(chunk) = world.get_chunk_mut(render_chunk.0) else {
             continue;
         };
@@ -50,79 +34,25 @@ fn build_meshes(
             continue;
         }
 
-        let mesh = build_chunk_mesh(chunk, atlas);
-        *mesh2d = Mesh2d(meshes.add(mesh));
+        // iterate children of this chunk
+        for child in children.iter() {
+            if let Ok((render_tile, mut sprite, mut visibility)) = tiles.get_mut(child) {
+                let pos = render_tile.0;
+                let tile = chunk.get(pos);
+                let id = tile.id;
+
+                if id == Id::ZERO {
+                    *visibility = Visibility::Hidden;
+                } else {
+                    *visibility = Visibility::Visible;
+                    sprite.image = sprites.complete.get(&id).unwrap().clone();
+                }
+            }
+        }
 
         chunk.dirty = false;
+        render_chunk.1 = false;
     }
-}
-
-fn build_chunk_mesh(chunk: &Chunk, atlas: &TextureAtlasMap) -> Mesh {
-    let mut positions = Vec::new();
-    let mut uvs = Vec::new();
-    let mut indices = Vec::new();
-
-    let mut index_offset = 0;
-
-    for y in 0..CHUNK_SIZE {
-        for x in 0..CHUNK_SIZE {
-            let tile = chunk.get(TilePosition::from_xy(x as u8, y as u8));
-            if tile.id == Id::ZERO {
-                continue;
-            }
-
-            let x = x as f32 * TILE_SIZE as f32;
-            let y = y as f32 * TILE_SIZE as f32;
-
-            // Quad vertices
-            positions.extend_from_slice(&[
-                [x, y, 0.0],
-                [x + TILE_SIZE as f32, y, 0.0],
-                [x + TILE_SIZE as f32, y + TILE_SIZE as f32, 0.0],
-                [x, y + TILE_SIZE as f32, 0.0],
-            ]);
-
-            // TEMP UVs (replace with atlas math later)
-            // uvs.extend_from_slice(&[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
-
-            let rect = match atlas.rect(tile.id) {
-                Some(r) => r,
-                None => continue,
-            };
-
-            let min = rect.min;
-            let max = rect.max;
-
-            // IMPORTANT: Bevy UV origin is bottom-left
-            uvs.extend_from_slice(&[
-                [min.x, max.y],
-                [max.x, max.y],
-                [max.x, min.y],
-                [min.x, min.y],
-            ]);
-
-            indices.extend_from_slice(&[
-                index_offset,
-                index_offset + 1,
-                index_offset + 2,
-                index_offset,
-                index_offset + 2,
-                index_offset + 3,
-            ]);
-
-            index_offset += 4;
-        }
-    }
-
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::RENDER_WORLD,
-    );
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(indices));
-
-    mesh
 }
 
 fn spawn_chunks(
@@ -130,13 +60,13 @@ fn spawn_chunks(
     base: Res<BaseChunk>,
     render_chunks: Query<(Entity, &RenderChunk)>,
     world: Res<World>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    atlas: Res<TextureAtlasMap>,
 ) {
+    const CHUNK_RADIUS: i32 = 1;
+
     // Calculate which chunks should be loaded (3x3 area)
     let mut chunks_to_load = Vec::new();
-    for cy in -1..=1 {
-        for cx in -1..=1 {
+    for cy in -CHUNK_RADIUS..=CHUNK_RADIUS {
+        for cx in -CHUNK_RADIUS..=CHUNK_RADIUS {
             let chunk_pos = base.0 + IVec2::new(cx, cy);
             chunks_to_load.push(chunk_pos);
         }
@@ -156,22 +86,28 @@ fn spawn_chunks(
 
     // Spawn chunks that aren't already loaded
     for chunk_pos in chunks_to_load {
-        if !chunks_in_range.contains(&chunk_pos) {
-            let Some(chunk) = world.get_chunk(chunk_pos) else {
-                continue;
-            };
+        if chunks_in_range.contains(&chunk_pos) || !world.contains_chunk(chunk_pos) {
+            continue;
+        };
 
-            commands.spawn((
-                RenderChunk(chunk_pos, true),
-                Mesh2d::default(),
-                MeshMaterial2d(atlas.material.clone()),
-                WorldTransform::from_chunk(chunk_pos),
-            ));
-        }
+        let mut render_chunk = commands.spawn((RenderChunk(chunk_pos, true), Transform::default()));
+
+        render_chunk.with_children(|spawner| {
+            for tile_pos in 0..=255 {
+                let tile_pos = TilePosition::new(tile_pos);
+                spawner.spawn((
+                    RenderTile(tile_pos),
+                    Sprite::default(),
+                    WorldTransform::new(chunk_pos, tile_pos.into()),
+                ));
+            }
+        });
     }
 }
 
-#[derive(Component)]
-#[require(Mesh2d)]
-#[require(MeshMaterial2d<TilemapMaterial>)]
+#[derive(Debug, Component)]
+pub struct RenderTile(pub TilePosition);
+
+#[derive(Debug, Component)]
+#[require(InheritedVisibility)]
 pub struct RenderChunk(pub IVec2, pub bool);

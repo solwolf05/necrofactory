@@ -4,9 +4,9 @@ use bevy::{camera::ScalingMode, prelude::*, window::WindowResolution};
 
 use crate::{
     debug::DebugPlugin,
-    graphics::{GraphicsPlugin, atlas::TextureAtlasMap},
+    graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState},
-    modding::{Id, ModAssetSourcePlugin, ModLoadState, ModPlugin, Registry, TileHandles},
+    modding::{Id, ModAssetSourcePlugin, ModLoadState, ModPlugin, Registry, TileSprites},
     world::{BaseChunk, RebaseSet, TILE_SIZE, World, WorldPlugin, WorldPosition, WorldTransform},
     world_gen::WorldGenPlugin,
 };
@@ -77,7 +77,7 @@ fn boot(mut state: ResMut<NextState<AppState>>) {
     state.set(AppState::ModLoading);
 }
 
-fn setup(mut commands: Commands, sprites: Res<TileHandles>) {
+fn setup(mut commands: Commands, sprites: Res<TileSprites>) {
     commands.spawn((
         Camera2d::default(),
         Projection::Orthographic(OrthographicProjection {
@@ -93,6 +93,16 @@ fn setup(mut commands: Commands, sprites: Res<TileHandles>) {
         WorldTransform::default(),
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
     ));
+
+    for x in -1..=1 {
+        for y in -1..=1 {
+            let position = Vec2::new(x as f32 * TILE_SIZE as f32, y as f32 * TILE_SIZE as f32);
+            commands.spawn((
+                Sprite::from_color(Color::hsv(100.0, 1.0, 0.5), Vec2 { x: 16.0, y: 16.0 }),
+                WorldTransform::from_xy(position.x, position.y),
+            ));
+        }
+    }
 }
 
 #[derive(Component)]

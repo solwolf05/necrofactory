@@ -63,10 +63,22 @@ impl Display for WorldPosition {
 
 impl From<WorldTransform> for WorldPosition {
     fn from(value: WorldTransform) -> Self {
-        Self {
-            chunk: value.chunk,
-            tile: TilePosition::from_xy(value.tile.x.floor() as u8, value.tile.y.floor() as u8),
-        }
+        let cs = CHUNK_SIZE as i32;
+
+        let tile_x = value.tile.x.round() as i32;
+        let tile_y = value.tile.y.round() as i32;
+        let chunk_offset_x = tile_x.div_euclid(cs);
+        let chunk_offset_y = tile_y.div_euclid(cs);
+        let tile_x = tile_x.rem_euclid(cs) as u8;
+        let tile_y = tile_y.rem_euclid(cs) as u8;
+
+        Self::new(
+            IVec2::new(
+                value.chunk.x + chunk_offset_x,
+                value.chunk.y + chunk_offset_y,
+            ),
+            TilePosition::from_xy(tile_x, tile_y),
+        )
     }
 }
 

@@ -8,6 +8,67 @@ use semver::{Version, VersionReq};
 
 use crate::modding::{Id, ModInfo, ModLoadState, ModRegistry, PathSegment};
 
+pub fn validate_mods(
+    mut next_state: ResMut<NextState<ModLoadState>>,
+    mut mods: ResMut<ModRegistry>,
+) {
+    #[cfg(feature = "no_disable")]
+    info!("NODISABLE is true");
+
+    let instant = Instant::now();
+
+    if let Err(dep_errors) = validate_dependencies(&mods) {
+        for error in dep_errors {
+            #[cfg(not(feature = "no_disable"))]
+            error
+                .mods()
+                .into_iter()
+                .for_each(|segment| mods.disable_segment(segment));
+
+            error!("Validation error: {}", error);
+        }
+    }
+
+    if let Err(cycle_errors) = detect_cycles(&mods) {
+        for error in cycle_errors {
+            #[cfg(not(feature = "no_disable"))]
+            error
+                .mods()
+                .into_iter()
+                .for_each(|segment| mods.disable_segment(segment));
+
+            error!("Validation error: {}", error);
+        }
+    }
+
+    match topological_sort(&mods) {
+        Ok(order) => {
+            mods.load_order = order;
+
+            let elapsed = instant.elapsed();
+
+            #[cfg(feature = "time")]
+            info!("Mod validation complete ({}ms)", elapsed.as_millis_f32());
+
+            #[cfg(not(feature = "time"))]
+            info!("Mod validation complete");
+
+            next_state.set(ModLoadState::Register);
+        }
+        Err(errors) => {
+            for error in errors {
+                #[cfg(not(feature = "no_disable"))]
+                error
+                    .mods()
+                    .into_iter()
+                    .for_each(|segment| mods.disable_segment(segment));
+
+                error!("Validation error: {}", error);
+            }
+        }
+    }
+}
+
 /// Error that can occur during mod validation
 #[derive(Debug)]
 pub enum ModValidationError {
@@ -264,9 +325,9 @@ fn topological_sort(registry: &ModRegistry) -> Result<Vec<Id<ModInfo>>, Vec<ModV
 
     // Build the graph: for each dependency, add an edge from dependency to dependent
     for (mod_id, _, mod_info) in registry.iter_with_id() {
-        if !mod_info.enabled() {
-            continue;
-        }
+        // if !mod_info.enabled() {
+        //     continue;
+        // }
 
         for (dep_segment, _) in mod_info.dependencies() {
             if let Some(dep_id) = registry.lookup(dep_segment) {
@@ -321,67 +382,6 @@ fn topological_sort(registry: &ModRegistry) -> Result<Vec<Id<ModInfo>>, Vec<ModV
     }
 
     Ok(result)
-}
-
-pub fn validate_mods(
-    mut next_state: ResMut<NextState<ModLoadState>>,
-    mut mods: ResMut<ModRegistry>,
-) {
-    #[cfg(feature = "no_disable")]
-    info!("NODISABLE is true");
-
-    let instant = Instant::now();
-
-    if let Err(dep_errors) = validate_dependencies(&mods) {
-        for error in dep_errors {
-            #[cfg(not(feature = "no_disable"))]
-            error
-                .mods()
-                .into_iter()
-                .for_each(|segment| mods.disable_segment(segment));
-
-            error!("Validation error: {}", error);
-        }
-    }
-
-    if let Err(cycle_errors) = detect_cycles(&mods) {
-        for error in cycle_errors {
-            #[cfg(not(feature = "no_disable"))]
-            error
-                .mods()
-                .into_iter()
-                .for_each(|segment| mods.disable_segment(segment));
-
-            error!("Validation error: {}", error);
-        }
-    }
-
-    match topological_sort(&mods) {
-        Ok(order) => {
-            mods.load_order = order;
-
-            let elapsed = instant.elapsed();
-
-            #[cfg(feature = "time")]
-            info!("Mod validation complete ({}ms)", elapsed.as_millis_f32());
-
-            #[cfg(not(feature = "time"))]
-            info!("Mod validation complete");
-
-            next_state.set(ModLoadState::Register);
-        }
-        Err(errors) => {
-            for error in errors {
-                #[cfg(not(feature = "no_disable"))]
-                error
-                    .mods()
-                    .into_iter()
-                    .for_each(|segment| mods.disable_segment(segment));
-
-                error!("Validation error: {}", error);
-            }
-        }
-    }
 }
 
 #[cfg(test)]

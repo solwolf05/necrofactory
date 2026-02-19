@@ -17,10 +17,10 @@ pub mod tile;
 mod transform;
 
 /// Tile size in tiles (n by n)
-pub const CHUNK_SIZE: usize = 16;
+pub const CHUNK_SIZE: u32 = 16;
 
 /// Tile size in pixels (n by n)
-pub const TILE_SIZE: usize = 16;
+pub const TILE_SIZE: u32 = 16;
 
 pub struct WorldPlugin;
 

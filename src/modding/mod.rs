@@ -25,7 +25,7 @@ use crate::{
     world::tile::TileDef,
 };
 
-pub use asset_loading::TileHandles;
+pub use asset_loading::TileSprites;
 
 mod asset_loading;
 mod discovery;
@@ -46,7 +46,7 @@ impl Plugin for ModPlugin {
             .init_resource::<Pending>()
             .init_resource::<Active>()
             .init_resource::<Complete>()
-            .init_resource::<TileHandles>()
+            .init_resource::<TileSprites>()
             .init_resource::<Registry<InputAction>>()
             .init_resource::<Registry<TileDef>>()
             .add_systems(OnEnter(ModLoadState::Discover), discover_mods)
