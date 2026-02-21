@@ -165,3 +165,85 @@ impl SubAssign for WorldPosition {
         *self = *self - rhs;
     }
 }
+
+impl Add<IVec2> for WorldPosition {
+    type Output = Self;
+
+    fn add(self, rhs: IVec2) -> Self::Output {
+        let cx = self.chunk.x + rhs.x.div_euclid(CHUNK_SIZE as i32);
+        let cy = self.chunk.y + rhs.y.div_euclid(CHUNK_SIZE as i32);
+
+        let tx = self.tile.x() as i8 + rhs.x.rem_euclid(CHUNK_SIZE as i32) as i8;
+        let ty = self.tile.y() as i8 + rhs.y.rem_euclid(CHUNK_SIZE as i32) as i8;
+
+        // Handle underflow for x
+        let (tx, cx) = if tx >= CHUNK_SIZE as i8 {
+            (tx - CHUNK_SIZE as i8, cx + 1)
+        } else if tx < 0 {
+            (tx + CHUNK_SIZE as i8, cx - 1)
+        } else {
+            (tx, cx)
+        };
+
+        // Handle underflow for y
+        let (ty, cy) = if ty >= CHUNK_SIZE as i8 {
+            (ty - CHUNK_SIZE as i8, cy + 1)
+        } else if ty < 0 {
+            (ty + CHUNK_SIZE as i8, cy - 1)
+        } else {
+            (ty, cy)
+        };
+
+        WorldPosition::new(
+            IVec2::new(cx, cy),
+            TilePosition::from_xy(tx as u8, ty as u8),
+        )
+    }
+}
+
+impl Sub<IVec2> for WorldPosition {
+    type Output = Self;
+
+    fn sub(self, rhs: IVec2) -> Self::Output {
+        let cx = self.chunk.x - rhs.x.div_euclid(CHUNK_SIZE as i32);
+        let cy = self.chunk.y - rhs.y.div_euclid(CHUNK_SIZE as i32);
+
+        let tx = self.tile.x() as i8 - rhs.x.rem_euclid(CHUNK_SIZE as i32) as i8;
+        let ty = self.tile.y() as i8 - rhs.y.rem_euclid(CHUNK_SIZE as i32) as i8;
+
+        // Handle underflow for x
+        let (tx, cx) = if tx >= CHUNK_SIZE as i8 {
+            (tx - CHUNK_SIZE as i8, cx + 1)
+        } else if tx < 0 {
+            (tx + CHUNK_SIZE as i8, cx - 1)
+        } else {
+            (tx, cx)
+        };
+
+        // Handle underflow for y
+        let (ty, cy) = if ty >= CHUNK_SIZE as i8 {
+            (ty - CHUNK_SIZE as i8, cy + 1)
+        } else if ty < 0 {
+            (ty + CHUNK_SIZE as i8, cy - 1)
+        } else {
+            (ty, cy)
+        };
+
+        WorldPosition::new(
+            IVec2::new(cx, cy),
+            TilePosition::from_xy(tx as u8, ty as u8),
+        )
+    }
+}
+
+impl AddAssign<IVec2> for WorldPosition {
+    fn add_assign(&mut self, rhs: IVec2) {
+        *self = *self + rhs;
+    }
+}
+
+impl SubAssign<IVec2> for WorldPosition {
+    fn sub_assign(&mut self, rhs: IVec2) {
+        *self = *self - rhs;
+    }
+}

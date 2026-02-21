@@ -9,6 +9,7 @@ use bevy::{
 
 use serde::Deserialize;
 
+use crate::modding::registration::{log_registration_completion, start_registration_time};
 use crate::{
     AppState,
     input::InputAction,
@@ -17,7 +18,7 @@ use crate::{
         discovery::discover_mods,
         finalization::finalize,
         registration::{
-            Active, Complete, Pending, check_registries_loaded, discover_definitions,
+            ActiveDefs, CompleteDefs, PendingDefs, check_registries_loaded, discover_definitions,
             log_registration, poll_registration, spawn_registration,
         },
         validation::validate_mods,
@@ -43,15 +44,16 @@ impl Plugin for ModPlugin {
     fn build(&self, app: &mut bevy::app::App) {
         app.add_sub_state::<ModLoadState>()
             .init_resource::<ModRegistry>()
-            .init_resource::<Pending>()
-            .init_resource::<Active>()
-            .init_resource::<Complete>()
+            .init_resource::<PendingDefs>()
+            .init_resource::<ActiveDefs>()
+            .init_resource::<CompleteDefs>()
             .init_resource::<TileSprites>()
             .init_resource::<Registry<InputAction>>()
             .init_resource::<Registry<TileDef>>()
             .add_systems(OnEnter(ModLoadState::Discover), discover_mods)
+            .add_systems(OnExit(ModLoadState::Discover), check_mods)
             .add_systems(OnEnter(ModLoadState::Validate), validate_mods)
-            .add_systems(OnExit(ModLoadState::Validate), check_mods)
+            .add_systems(OnExit(ModLoadState::Validate), check_mod_load_order)
             .add_systems(OnEnter(ModLoadState::Register), discover_definitions)
             .add_systems(
                 Update,
@@ -70,6 +72,10 @@ impl Plugin for ModPlugin {
             )
             .add_systems(OnEnter(ModLoadState::Finalize), finalize)
             .add_systems(OnEnter(ModLoadState::Finalize), check_registries);
+
+        #[cfg(feature = "time")]
+        app.add_systems(OnEnter(ModLoadState::Register), start_registration_time)
+            .add_systems(OnExit(ModLoadState::Register), log_registration_completion);
     }
 }
 
@@ -115,6 +121,9 @@ fn check_registries(inputs: Res<Registry<InputAction>>, tiles: Res<Registry<Tile
 
 fn check_mods(mods: Res<ModRegistry>) {
     info!("Mods:\n{}", *mods);
+}
+
+fn check_mod_load_order(mods: Res<ModRegistry>) {
     info!(
         "Mod load order: {}",
         mods.load_order
@@ -174,6 +183,14 @@ impl ModRegistry {
         self.mods.len()
     }
 
+    pub fn len_enabled(&self) -> usize {
+        self.mods.iter().filter(|(_, m)| m.enabled()).count()
+    }
+
+    pub fn len_disabled(&self) -> usize {
+        self.mods.iter().filter(|(_, m)| !m.enabled()).count()
+    }
+
     pub fn lookup(&self, segment: &PathSegment) -> Option<Id<ModInfo>> {
         self.lookup.get(&segment).copied()
     }
@@ -210,9 +227,43 @@ impl ModRegistry {
         self.mods.iter().map(|(s, t)| (s, t))
     }
 
+    pub fn iter_enabled(&self) -> impl Iterator<Item = (&PathSegment, &ModInfo)> {
+        self.mods
+            .iter()
+            .filter(|(_, t)| t.enabled())
+            .map(|(s, t)| (s, t))
+    }
+
+    pub fn iter_disabled(&self) -> impl Iterator<Item = (&PathSegment, &ModInfo)> {
+        self.mods
+            .iter()
+            .filter(|(_, t)| !t.enabled())
+            .map(|(s, t)| (s, t))
+    }
+
     pub fn iter_with_id(&self) -> impl Iterator<Item = (Id<ModInfo>, &PathSegment, &ModInfo)> {
         self.mods
             .iter()
+            .enumerate()
+            .map(|(i, (s, t))| (Id::new(i as u32), s, t))
+    }
+
+    pub fn iter_enabled_with_id(
+        &self,
+    ) -> impl Iterator<Item = (Id<ModInfo>, &PathSegment, &ModInfo)> {
+        self.mods
+            .iter()
+            .filter(|(_, t)| t.enabled())
+            .enumerate()
+            .map(|(i, (s, t))| (Id::new(i as u32), s, t))
+    }
+
+    pub fn iter_disabled_with_id(
+        &self,
+    ) -> impl Iterator<Item = (Id<ModInfo>, &PathSegment, &ModInfo)> {
+        self.mods
+            .iter()
+            .filter(|(_, t)| !t.enabled())
             .enumerate()
             .map(|(i, (s, t))| (Id::new(i as u32), s, t))
     }
@@ -293,23 +344,33 @@ impl ModInfo {
 
 impl Display for ModInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {} by {}", self.name(), self.version(), self.author())?;
+        if self.dependencies().len() != 0 {
+            write!(
+                f,
+                "; dependencies: {}",
+                self.dependencies()
+                    .into_iter()
+                    .map(|(i, v)| format!("{} {}", i, v))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )?;
+        }
+        if self.optional_dependencies().len() != 0 {
+            write!(
+                f,
+                "; optional dependencies: {}",
+                self.optional_dependencies()
+                    .into_iter()
+                    .map(|(i, v)| format!("{} {}", i, v))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )?;
+        }
         write!(
             f,
-            "{} {} by {}; dependencies: {}; optional dependencies: {}; path: {}; {}",
-            self.name(),
-            self.version(),
-            self.author(),
-            self.dependencies()
-                .into_iter()
-                .map(|(i, v)| format!("{} {}", i, v))
-                .collect::<Vec<_>>()
-                .join(", "),
-            self.optional_dependencies()
-                .into_iter()
-                .map(|(i, v)| format!("{} {}", i, v))
-                .collect::<Vec<_>>()
-                .join(", "),
-            self.path().display(),
+            "; path: mods/{}; {}",
+            self.path().strip_prefix(mods_path()).unwrap().display(),
             if self.enabled() {
                 "enabled"
             } else {

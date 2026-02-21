@@ -42,9 +42,9 @@ pub fn dynamic_gen(world: ResMut<World>, base: Res<BaseChunk>) {
 
 pub fn test_gen_chunk(world: &mut World, pos: IVec2) {
     let mut chunk = Chunk::empty();
-    for i in 0..=255 {
-        if rand::random_bool(0.25) {
-            chunk.insert(TilePosition::new(i), Tile::new(Id::ONE));
+    if pos.y < 0 {
+        for tile in chunk.iter_mut() {
+            *tile = Tile { id: Id::ONE };
         }
     }
     world.insert_chunk(pos, chunk);

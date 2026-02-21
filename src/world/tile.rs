@@ -16,6 +16,16 @@ impl Tile {
     }
 }
 
+impl Tile {
+    pub fn is_some(&self) -> bool {
+        self.id != Id::ZERO
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.id == Id::ZERO
+    }
+}
+
 impl Default for Tile {
     fn default() -> Self {
         Self::new(Id::ZERO)

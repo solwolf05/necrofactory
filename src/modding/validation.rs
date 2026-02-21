@@ -138,11 +138,7 @@ impl std::error::Error for ModValidationError {}
 fn validate_dependencies(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> {
     let mut errors = Vec::new();
 
-    for (mod_id, mod_info) in registry.iter() {
-        if !mod_info.enabled() {
-            continue;
-        }
-
+    for (mod_id, mod_info) in registry.iter_enabled() {
         validate_required_dependencies(registry, &mut errors, mod_id, mod_info);
         validate_optional_dependencies(registry, &mut errors, mod_id, mod_info);
     }
@@ -171,6 +167,16 @@ fn validate_required_dependencies(
             continue;
         };
 
+        if !dep_info.enabled() {
+            errors.push(ModValidationError::VersionMismatch {
+                mod_id: mod_id.clone(),
+                dependency_id: dep_id.clone(),
+                required: version_req.clone(),
+                found: None,
+            });
+            continue;
+        }
+
         if let (Ok(req), Ok(ver)) = (
             VersionReq::parse(version_req),
             Version::parse(dep_info.version()),
@@ -197,6 +203,10 @@ fn validate_optional_dependencies(
         let Some(dep_info) = registry.get_by_segment(&dep_id) else {
             continue;
         };
+
+        if !dep_info.enabled() {
+            continue;
+        }
 
         if let (Ok(req), Ok(ver)) = (
             VersionReq::parse(version_req),
@@ -243,6 +253,11 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
                     unreachable!("should have already been validated");
                 };
 
+                let dep_info = registry.get(dep_id).unwrap();
+                if !dep_info.enabled() {
+                    continue;
+                }
+
                 if !visited.contains(&dep_id) {
                     if dfs(dep_id, registry, visited, rec_stack, path, errors) {
                         return true;
@@ -262,6 +277,11 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
                 let Some(dep_id) = registry.lookup(dep_segment) else {
                     continue;
                 };
+
+                let dep_info = registry.get(dep_id).unwrap();
+                if !dep_info.enabled() {
+                    continue;
+                }
 
                 if !visited.contains(&dep_id) {
                     if dfs(dep_id, registry, visited, rec_stack, path, errors) {
@@ -284,11 +304,7 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
         false
     }
 
-    for (id, _, mod_info) in registry.iter_with_id() {
-        if !mod_info.enabled() {
-            continue;
-        }
-
+    for (id, ..) in registry.iter_enabled_with_id() {
         if !visited.contains(&id) {
             dfs(
                 id,
@@ -314,23 +330,20 @@ fn topological_sort(registry: &ModRegistry) -> Result<Vec<Id<ModInfo>>, Vec<ModV
     let mut adjacency: HashMap<Id<ModInfo>, Vec<Id<ModInfo>>> = HashMap::new();
 
     // Initialize in-degree and adjacency list
-    for (id, _, mod_info) in registry.iter_with_id() {
-        if !mod_info.enabled() {
-            continue;
-        }
-
+    for (id, ..) in registry.iter_enabled_with_id() {
         in_degree.insert(id, 0);
         adjacency.insert(id, Vec::new());
     }
 
     // Build the graph: for each dependency, add an edge from dependency to dependent
-    for (mod_id, _, mod_info) in registry.iter_with_id() {
-        // if !mod_info.enabled() {
-        //     continue;
-        // }
-
+    for (mod_id, _, mod_info) in registry.iter_enabled_with_id() {
         for (dep_segment, _) in mod_info.dependencies() {
             if let Some(dep_id) = registry.lookup(dep_segment) {
+                let dep_info = registry.get(dep_id).unwrap();
+                if !dep_info.enabled() {
+                    continue;
+                }
+
                 adjacency.entry(dep_id).and_modify(|deps| deps.push(mod_id));
                 *in_degree.entry(mod_id).or_insert(0) += 1;
             }
@@ -338,6 +351,11 @@ fn topological_sort(registry: &ModRegistry) -> Result<Vec<Id<ModInfo>>, Vec<ModV
 
         for (dep_segment, _) in mod_info.optional_dependencies() {
             if let Some(dep_id) = registry.lookup(dep_segment) {
+                let dep_info = registry.get(dep_id).unwrap();
+                if !dep_info.enabled() {
+                    continue;
+                }
+
                 adjacency.entry(dep_id).and_modify(|deps| deps.push(mod_id));
                 *in_degree.entry(mod_id).or_insert(0) += 1;
             }
@@ -375,7 +393,7 @@ fn topological_sort(registry: &ModRegistry) -> Result<Vec<Id<ModInfo>>, Vec<ModV
     }
 
     // If result doesn't contain all modules, there's a cycle (should be caught earlier, but be safe)
-    if result.len() != registry.len() {
+    if result.len() != registry.len_enabled() {
         return Err(vec![ModValidationError::CircularDependency {
             cycle: vec![],
         }]);

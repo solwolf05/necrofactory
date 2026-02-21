@@ -3,20 +3,22 @@
 use bevy::{camera::ScalingMode, prelude::*, window::WindowResolution};
 
 use crate::{
-    debug::DebugPlugin,
+    debug::{DebugPlugin, coord::CoordinatePlugin, physics::PhysicsDebugPlugin},
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState},
-    modding::{Id, ModAssetSourcePlugin, ModLoadState, ModPlugin, Registry, TileSprites},
-    world::{BaseChunk, RebaseSet, TILE_SIZE, World, WorldPlugin, WorldPosition, WorldTransform},
+    modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry},
+    physics::{PhysicsPlugin, Rigidbody},
+    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform},
     world_gen::WorldGenPlugin,
 };
 
+mod debug;
 mod graphics;
 mod input;
 mod modding;
-// mod serialization;
-mod debug;
+mod physics;
 mod player;
+mod serialization;
 mod world;
 mod world_gen;
 
@@ -27,7 +29,7 @@ fn main() -> AppExit {
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        title: "Modulus".to_owned(),
+                        title: "Necrofactory".to_owned(),
                         resolution: WindowResolution::new(1920, 1080),
                         present_mode: bevy::window::PresentMode::AutoNoVsync,
                         ..Default::default()
@@ -41,6 +43,9 @@ fn main() -> AppExit {
             GraphicsPlugin,
             InputPlugin,
             DebugPlugin,
+            CoordinatePlugin,
+            PhysicsDebugPlugin,
+            PhysicsPlugin,
         ))
         .insert_state(AppState::Boot)
         .add_systems(OnEnter(AppState::Boot), boot)
@@ -77,7 +82,7 @@ fn boot(mut state: ResMut<NextState<AppState>>) {
     state.set(AppState::ModLoading);
 }
 
-fn setup(mut commands: Commands, sprites: Res<TileSprites>) {
+fn setup(mut commands: Commands) {
     commands.spawn((
         Camera2d::default(),
         Projection::Orthographic(OrthographicProjection {
@@ -92,17 +97,8 @@ fn setup(mut commands: Commands, sprites: Res<TileSprites>) {
         Player,
         WorldTransform::default(),
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
+        Rigidbody::new(1.0),
     ));
-
-    for x in -1..=1 {
-        for y in -1..=1 {
-            let position = Vec2::new(x as f32 * TILE_SIZE as f32, y as f32 * TILE_SIZE as f32);
-            commands.spawn((
-                Sprite::from_color(Color::hsv(100.0, 1.0, 0.5), Vec2 { x: 16.0, y: 16.0 }),
-                WorldTransform::from_xy(position.x, position.y),
-            ));
-        }
-    }
 }
 
 #[derive(Component)]
@@ -125,25 +121,30 @@ fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<
 
 fn player_move(
     time: Res<Time>,
-    mut player: Query<&mut WorldTransform, With<Player>>,
+    mut player: Query<&mut Rigidbody, With<Player>>,
     input: Res<InputState>,
     registry: Res<Registry<InputAction>>,
 ) {
-    let mut transform = player.single_mut().unwrap();
+    let mut body = player.single_mut().unwrap();
 
     let up = registry.lookup("base::up").unwrap();
     let down = registry.lookup("base::down").unwrap();
     let left = registry.lookup("base::left").unwrap();
     let right = registry.lookup("base::right").unwrap();
     let fast = registry.lookup("base::fast").unwrap();
+    let jump = registry.lookup("base::jump").unwrap();
 
     let axes = input.vec2(right, left, up, down);
-    let speed = match input.pressed(fast) {
-        false => 8.0,
-        true => 32.0,
+    let speed = match input.pressed(jump) {
+        false => 64.0,
+        true => 256.0,
     };
 
-    *transform += axes.normalize_or_zero() * speed * time.delta_secs();
+    body.acceleration += axes.normalize_or_zero() * speed * time.delta_secs();
+
+    if input.just_pressed(jump) {
+        body.apply_force(Vec2::Y * 512.0);
+    }
 }
 
 fn zoom(

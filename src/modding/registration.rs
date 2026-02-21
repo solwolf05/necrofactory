@@ -22,15 +22,15 @@ use crate::{
     world::tile::TileDef,
 };
 
-const MAX_CONCURRENT_IO: usize = 64;
+const MAX_CONCURRENT_IO: usize = 1;
 
 #[derive(Debug, Default, Resource)]
-pub struct Pending {
+pub struct PendingDefs {
     pub inputs: VecDeque<(Id<ModInfo>, PathBuf)>,
     pub tiles: VecDeque<(Id<ModInfo>, PathBuf)>,
 }
 
-impl Pending {
+impl PendingDefs {
     pub fn len(&self) -> usize {
         self.inputs.len() + self.tiles.len()
     }
@@ -41,12 +41,12 @@ impl Pending {
 }
 
 #[derive(Debug, Default, Resource)]
-pub struct Active {
+pub struct ActiveDefs {
     pub inputs: Vec<Task<Result<(DefPath, InputAction), DefinitionLoadError>>>,
     pub tiles: Vec<Task<Result<(DefPath, TileDef), DefinitionLoadError>>>,
 }
 
-impl Active {
+impl ActiveDefs {
     pub fn len(&self) -> usize {
         self.inputs.len() + self.tiles.len()
     }
@@ -57,12 +57,12 @@ impl Active {
 }
 
 #[derive(Debug, Default, Resource)]
-pub struct Complete {
+pub struct CompleteDefs {
     pub inputs: usize,
     pub tiles: usize,
 }
 
-impl Complete {
+impl CompleteDefs {
     pub fn len(&self) -> usize {
         self.inputs + self.tiles
     }
@@ -72,7 +72,39 @@ impl Complete {
     }
 }
 
-pub fn discover_definitions(mods: Res<ModRegistry>, mut pending: ResMut<Pending>) {
+#[cfg(feature = "time")]
+#[derive(Debug, Resource)]
+pub struct ModRegistrationTime(Instant);
+
+#[cfg(feature = "time")]
+pub fn start_registration_time(mut commands: Commands) {
+    commands.insert_resource(ModRegistrationTime(Instant::now()));
+}
+
+#[cfg(feature = "time")]
+pub fn log_registration_completion(time: Res<ModRegistrationTime>) {
+    info!(
+        "Mod registration complete ({}ms)",
+        time.0.elapsed().as_millis_f32()
+    );
+}
+
+pub fn log_registration(
+    pending: Res<PendingDefs>,
+    active: Res<ActiveDefs>,
+    complete: Res<CompleteDefs>,
+) {
+    let total = pending.len() + active.len() + complete.len();
+
+    info!(
+        "{} / {} ({}%)",
+        complete.len(),
+        total,
+        complete.len() * 100 / (total)
+    )
+}
+
+pub fn discover_definitions(mods: Res<ModRegistry>, mut pending: ResMut<PendingDefs>) {
     for (id, _, mod_info) in mods.iter_with_id() {
         pending.inputs.extend(read_mod_dir(id, mod_info, "inputs"));
         pending.tiles.extend(read_mod_dir(id, mod_info, "tiles"));
@@ -95,8 +127,8 @@ fn read_dir(path: &Path) -> impl Iterator<Item = PathBuf> {
 
 pub fn spawn_registration(
     mods: Res<ModRegistry>,
-    mut pending: ResMut<Pending>,
-    mut active: ResMut<Active>,
+    mut pending: ResMut<PendingDefs>,
+    mut active: ResMut<ActiveDefs>,
 ) {
     let pool = IoTaskPool::get();
 
@@ -118,8 +150,8 @@ pub fn spawn_registration(
 }
 
 pub fn poll_registration(
-    mut active: ResMut<Active>,
-    mut complete: ResMut<Complete>,
+    mut active: ResMut<ActiveDefs>,
+    mut complete: ResMut<CompleteDefs>,
     inputs: ResMut<Registry<InputAction>>,
     tiles: ResMut<Registry<TileDef>>,
 ) {
@@ -154,24 +186,14 @@ fn poll_registry<T>(
 
 pub fn check_registries_loaded(
     mut next_state: ResMut<NextState<ModLoadState>>,
-    pending: Res<Pending>,
-    active: Res<Active>,
+    pending: Res<PendingDefs>,
+    active: Res<ActiveDefs>,
 ) {
     if pending.is_empty() && active.is_empty() {
+        #[cfg(not(feature = "time"))]
         info!("Mod registration complete");
         next_state.set(ModLoadState::LoadAssets);
     }
-}
-
-pub fn log_registration(pending: Res<Pending>, active: Res<Active>, complete: Res<Complete>) {
-    let total = pending.len() + active.len() + complete.len();
-
-    info!(
-        "{} / {} ({}%)",
-        complete.len(),
-        total,
-        complete.len() * 100 / (total)
-    )
 }
 
 async fn load_input(

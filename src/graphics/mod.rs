@@ -34,7 +34,6 @@ fn update_sprites(
             continue;
         }
 
-        // iterate children of this chunk
         for child in children.iter() {
             if let Ok((render_tile, mut sprite, mut visibility)) = tiles.get_mut(child) {
                 let pos = render_tile.0;
