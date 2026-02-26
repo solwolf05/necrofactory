@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
-use bevy::prelude::*;
+use bevy::{math::I64Vec2, prelude::*};
 
 use chunk::Chunk;
 use tile::Tile;
 
-use crate::world::transform::{apply_rebase, apply_world_transform};
+use crate::world::{
+    chunk::TilePosition,
+    transform::{apply_rebase, apply_world_transform},
+};
 
-pub use position::WorldPosition;
 pub use transform::{BaseChunk, RebaseSet, WorldTransform};
 
 pub mod chunk;
@@ -63,15 +65,19 @@ impl World {
         self.chunks.insert(pos, chunk);
     }
 
-    pub fn get_tile(&self, pos: WorldPosition) -> Option<&Tile> {
-        let chunk = pos.chunk;
-        let tile = pos.tile;
-        self.chunks.get(&chunk).map(|chunk| chunk.get(tile))
+    pub fn get_tile(&self, pos: I64Vec2) -> Option<&Tile> {
+        let chunk = pos / CHUNK_SIZE as i64;
+        let tile = pos % CHUNK_SIZE as i64;
+        self.chunks
+            .get(&chunk.as_ivec2())
+            .map(|chunk| chunk.get(TilePosition::from_xy(tile.x as u8, tile.y as u8)))
     }
 
-    pub fn get_tile_mut(&mut self, pos: WorldPosition) -> Option<&mut Tile> {
-        let chunk = pos.chunk;
-        let tile = pos.tile;
-        self.chunks.get_mut(&chunk).map(|chunk| chunk.get_mut(tile))
+    pub fn get_tile_mut(&mut self, pos: I64Vec2) -> Option<&mut Tile> {
+        let chunk = pos / CHUNK_SIZE as i64;
+        let tile = pos % CHUNK_SIZE as i64;
+        self.chunks
+            .get_mut(&chunk.as_ivec2())
+            .map(|chunk| chunk.get_mut(TilePosition::from_xy(tile.x as u8, tile.y as u8)))
     }
 }

@@ -5,7 +5,7 @@ use std::{
 
 use bevy::prelude::*;
 
-use crate::world::{CHUNK_SIZE, TILE_SIZE, WorldPosition};
+use crate::world::{CHUNK_SIZE, TILE_SIZE};
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RebaseSet;
@@ -113,12 +113,12 @@ impl Display for WorldTransform {
     }
 }
 
-impl From<WorldPosition> for WorldTransform {
-    fn from(value: WorldPosition) -> Self {
-        let (x, y) = value.tile.to_xy();
-        Self::new(value.chunk, Vec2::new(x as f32, y as f32))
-    }
-}
+// impl From<WorldPosition> for WorldTransform {
+//     fn from(value: WorldPosition) -> Self {
+//         let (x, y) = value.tile.to_xy();
+//         Self::new(value.chunk, Vec2::new(x as f32, y as f32))
+//     }
+// }
 
 impl From<Vec2> for WorldTransform {
     fn from(value: Vec2) -> Self {
