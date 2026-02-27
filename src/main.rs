@@ -93,7 +93,7 @@ fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<
     let chunk = IVec2::from(
         world_transform
             .translation
-            .div_euclid_int(CHUNK_SIZE as i64),
+            .div_euclid_int(CHUNK_SIZE as i32),
     );
     if chunk != base.0 {
         base.0 = chunk;
@@ -151,7 +151,7 @@ fn toggle_tile(
 ) {
     let player_pos = player.single().unwrap().clone().translation.round();
     if input.just_pressed(registry.lookup("base::toggle").unwrap()) {
-        let tile = world.get_tile_mut(player_pos.into()).unwrap();
+        let tile = world.get_tile_mut(IVec2::from(player_pos).into()).unwrap();
         if tile.id == Id::ZERO {
             tile.id = Id::ONE;
         } else {

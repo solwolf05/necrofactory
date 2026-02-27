@@ -1,10 +1,11 @@
 use std::{
     fmt::Display,
-    ops::{Add, Div, Mul, Rem, Sub},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign},
 };
 
-use bevy::math::{I64Vec2, IVec2, Vec2};
-use fixed::{traits::ToFixed, types::I32F32};
+use bevy::math::{IVec2, Vec2};
+
+use crate::math::i32f32::I32F32;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FixedVec2 {
@@ -13,8 +14,16 @@ pub struct FixedVec2 {
 }
 
 impl FixedVec2 {
-    pub fn new(x: I32F32, y: I32F32) -> Self {
+    pub const fn new(x: I32F32, y: I32F32) -> Self {
         Self { x, y }
+    }
+
+    pub const fn splat(value: I32F32) -> Self {
+        Self::new(value, value)
+    }
+
+    pub fn trunc(self) -> Self {
+        Self::new(self.x.trunc(), self.y.trunc())
     }
 
     pub fn floor(self) -> Self {
@@ -37,48 +46,36 @@ impl FixedVec2 {
         Self::new(self.x.rem_euclid(rhs.x), self.y.rem_euclid(rhs.y))
     }
 
-    pub fn div_euclid_int(self, rhs: i64) -> Self {
+    pub fn div_euclid_int(self, rhs: i32) -> Self {
         Self::new(self.x.div_euclid_int(rhs), self.y.div_euclid_int(rhs))
     }
 
-    pub fn rem_euclid_int(self, rhs: i64) -> Self {
+    pub fn rem_euclid_int(self, rhs: i32) -> Self {
         Self::new(self.x.rem_euclid_int(rhs), self.y.rem_euclid_int(rhs))
-    }
-}
-
-impl From<Vec2> for FixedVec2 {
-    fn from(value: Vec2) -> Self {
-        Self::new(value.x.to_fixed(), value.y.to_fixed())
-    }
-}
-
-impl From<FixedVec2> for Vec2 {
-    fn from(value: FixedVec2) -> Self {
-        Vec2::new(value.x.to_num(), value.y.to_num())
     }
 }
 
 impl From<IVec2> for FixedVec2 {
     fn from(value: IVec2) -> Self {
-        Self::new(value.x.to_fixed(), value.y.to_fixed())
+        Self::new(value.x.into(), value.y.into())
     }
 }
 
 impl From<FixedVec2> for IVec2 {
     fn from(value: FixedVec2) -> Self {
-        IVec2::new(value.x.to_num(), value.y.to_num())
+        IVec2::new(value.x.into(), value.y.into())
     }
 }
 
-impl From<I64Vec2> for FixedVec2 {
-    fn from(value: I64Vec2) -> Self {
-        Self::new(value.x.to_fixed(), value.y.to_fixed())
+impl From<Vec2> for FixedVec2 {
+    fn from(value: Vec2) -> Self {
+        Self::new(value.x.into(), value.y.into())
     }
 }
 
-impl From<FixedVec2> for I64Vec2 {
+impl From<FixedVec2> for Vec2 {
     fn from(value: FixedVec2) -> Self {
-        I64Vec2::new(value.x.to_num(), value.y.to_num())
+        Vec2::new(value.x.into(), value.y.into())
     }
 }
 
@@ -104,7 +101,7 @@ impl Add<IVec2> for FixedVec2 {
     type Output = Self;
 
     fn add(self, rhs: IVec2) -> Self::Output {
-        Self::new(self.x + I32F32::from(rhs.x), self.y + I32F32::from(rhs.y))
+        Self::new(self.x + rhs.x, self.y + rhs.y)
     }
 }
 
@@ -112,10 +109,23 @@ impl Add<Vec2> for FixedVec2 {
     type Output = Self;
 
     fn add(self, rhs: Vec2) -> Self::Output {
-        Self::new(
-            self.x + I32F32::from_num(rhs.x),
-            self.y + I32F32::from_num(rhs.y),
-        )
+        Self::new(self.x + rhs.x, self.y + rhs.y)
+    }
+}
+
+impl Add<I32F32> for FixedVec2 {
+    type Output = Self;
+
+    fn add(self, rhs: I32F32) -> Self::Output {
+        Self::new(self.x + rhs, self.y + rhs)
+    }
+}
+
+impl Add<i32> for FixedVec2 {
+    type Output = Self;
+
+    fn add(self, rhs: i32) -> Self::Output {
+        Self::new(self.x + rhs, self.y + rhs)
     }
 }
 
@@ -131,7 +141,7 @@ impl Sub<IVec2> for FixedVec2 {
     type Output = Self;
 
     fn sub(self, rhs: IVec2) -> Self::Output {
-        Self::new(self.x - I32F32::from(rhs.x), self.y - I32F32::from(rhs.y))
+        Self::new(self.x - rhs.x, self.y - rhs.y)
     }
 }
 
@@ -139,10 +149,23 @@ impl Sub<Vec2> for FixedVec2 {
     type Output = Self;
 
     fn sub(self, rhs: Vec2) -> Self::Output {
-        Self::new(
-            self.x - I32F32::from_num(rhs.x),
-            self.y - I32F32::from_num(rhs.y),
-        )
+        Self::new(self.x - rhs.x, self.y - rhs.y)
+    }
+}
+
+impl Sub<I32F32> for FixedVec2 {
+    type Output = Self;
+
+    fn sub(self, rhs: I32F32) -> Self::Output {
+        Self::new(self.x - rhs, self.y - rhs)
+    }
+}
+
+impl Sub<i32> for FixedVec2 {
+    type Output = Self;
+
+    fn sub(self, rhs: i32) -> Self::Output {
+        Self::new(self.x - rhs, self.y - rhs)
     }
 }
 
@@ -154,10 +177,10 @@ impl Mul<I32F32> for FixedVec2 {
     }
 }
 
-impl Mul<i64> for FixedVec2 {
+impl Mul<i32> for FixedVec2 {
     type Output = Self;
 
-    fn mul(self, rhs: i64) -> Self::Output {
+    fn mul(self, rhs: i32) -> Self::Output {
         Self::new(self.x * rhs, self.y * rhs)
     }
 }
@@ -170,23 +193,21 @@ impl Div<I32F32> for FixedVec2 {
     }
 }
 
-impl Div<i64> for FixedVec2 {
+impl Div<i32> for FixedVec2 {
     type Output = Self;
 
-    fn div(self, rhs: i64) -> Self::Output {
+    fn div(self, rhs: i32) -> Self::Output {
         Self::new(self.x / rhs, self.y / rhs)
     }
 }
 
-impl Rem<i64> for FixedVec2 {
+impl Rem<i32> for FixedVec2 {
     type Output = Self;
 
-    fn rem(self, rhs: i64) -> Self::Output {
+    fn rem(self, rhs: i32) -> Self::Output {
         Self::new(self.x % rhs, self.y % rhs)
     }
 }
-
-use std::ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign};
 
 impl AddAssign for FixedVec2 {
     fn add_assign(&mut self, rhs: Self) {
@@ -197,15 +218,15 @@ impl AddAssign for FixedVec2 {
 
 impl AddAssign<IVec2> for FixedVec2 {
     fn add_assign(&mut self, rhs: IVec2) {
-        self.x += I32F32::from(rhs.x);
-        self.y += I32F32::from(rhs.y);
+        self.x += rhs.x;
+        self.y += rhs.y;
     }
 }
 
 impl AddAssign<Vec2> for FixedVec2 {
     fn add_assign(&mut self, rhs: Vec2) {
-        self.x += I32F32::from_num(rhs.x);
-        self.y += I32F32::from_num(rhs.y);
+        self.x += rhs.x;
+        self.y += rhs.y;
     }
 }
 
@@ -218,15 +239,15 @@ impl SubAssign for FixedVec2 {
 
 impl SubAssign<IVec2> for FixedVec2 {
     fn sub_assign(&mut self, rhs: IVec2) {
-        self.x -= I32F32::from(rhs.x);
-        self.y -= I32F32::from(rhs.y);
+        self.x -= rhs.x;
+        self.y -= rhs.y;
     }
 }
 
 impl SubAssign<Vec2> for FixedVec2 {
     fn sub_assign(&mut self, rhs: Vec2) {
-        self.x -= I32F32::from_num(rhs.x);
-        self.y -= I32F32::from_num(rhs.y);
+        self.x -= rhs.x;
+        self.y -= rhs.y;
     }
 }
 
@@ -237,8 +258,8 @@ impl MulAssign<I32F32> for FixedVec2 {
     }
 }
 
-impl MulAssign<i64> for FixedVec2 {
-    fn mul_assign(&mut self, rhs: i64) {
+impl MulAssign<i32> for FixedVec2 {
+    fn mul_assign(&mut self, rhs: i32) {
         self.x *= rhs;
         self.y *= rhs;
     }
@@ -251,15 +272,15 @@ impl DivAssign<I32F32> for FixedVec2 {
     }
 }
 
-impl DivAssign<i64> for FixedVec2 {
-    fn div_assign(&mut self, rhs: i64) {
+impl DivAssign<i32> for FixedVec2 {
+    fn div_assign(&mut self, rhs: i32) {
         self.x /= rhs;
         self.y /= rhs;
     }
 }
 
-impl RemAssign<i64> for FixedVec2 {
-    fn rem_assign(&mut self, rhs: i64) {
+impl RemAssign<i32> for FixedVec2 {
+    fn rem_assign(&mut self, rhs: i32) {
         self.x %= rhs;
         self.y %= rhs;
     }

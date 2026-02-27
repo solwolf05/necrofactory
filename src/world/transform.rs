@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use fixed::traits::ToFixed;
 
 use crate::{
     math::FixedVec2,
@@ -27,14 +26,11 @@ impl WorldTransform {
     }
 
     pub fn from_chunk(chunk: IVec2) -> Self {
-        Self::from_translation(FixedVec2::new(
-            (chunk.x * CHUNK_SIZE as i32).into(),
-            (chunk.y * CHUNK_SIZE as i32).into(),
-        ))
+        Self::from_translation(FixedVec2::from(chunk) * CHUNK_SIZE as i32)
     }
 
     pub fn from_tile(tile: Vec2) -> Self {
-        Self::from_translation(FixedVec2::new(tile.x.to_fixed(), tile.y.to_fixed()))
+        Self::from_translation(tile.into())
     }
 }
 
@@ -60,6 +56,6 @@ pub fn apply_world_transform(
 
 fn rebase(base: &BaseChunk, transform: &mut Transform, world_transform: &WorldTransform) {
     let offset = world_transform.translation - base.0 * CHUNK_SIZE as i32;
-    let pos = offset * TILE_SIZE as i64;
+    let pos = offset * TILE_SIZE as i32;
     transform.translation = Vec2::from(pos).extend(0.0);
 }
