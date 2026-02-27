@@ -1,26 +1,16 @@
-#![feature(duration_millis_float)]
-
 use bevy::{camera::ScalingMode, prelude::*, window::WindowResolution};
 
-use crate::{
+use necrofactory::{
+    AppState,
     debug::{DebugPlugin, coord::CoordinatePlugin, physics::PhysicsDebugPlugin},
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState},
     modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry},
     physics::{PhysicsPlugin, Rigidbody},
-    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform},
+    player::Player,
+    world::{BaseChunk, CHUNK_SIZE, RebaseSet, World, WorldPlugin, WorldTransform},
     world_gen::WorldGenPlugin,
 };
-
-mod debug;
-mod graphics;
-mod input;
-mod modding;
-mod physics;
-mod player;
-mod serialization;
-mod world;
-mod world_gen;
 
 fn main() -> AppExit {
     App::new()
@@ -44,8 +34,8 @@ fn main() -> AppExit {
             InputPlugin,
             DebugPlugin,
             CoordinatePlugin,
-            PhysicsDebugPlugin,
-            PhysicsPlugin,
+            // PhysicsDebugPlugin,
+            // PhysicsPlugin,
         ))
         .insert_state(AppState::Boot)
         .add_systems(OnEnter(AppState::Boot), boot)
@@ -66,16 +56,6 @@ fn main() -> AppExit {
                 .run_if(in_state(AppState::InGame)),
         )
         .run()
-}
-
-#[derive(States, Debug, Default, Clone, Eq, PartialEq, Hash)]
-pub enum AppState {
-    #[default]
-    Boot,
-    ModLoading,
-    MainMenu,
-    InGame,
-    Shutdown,
 }
 
 fn boot(mut state: ResMut<NextState<AppState>>) {
@@ -101,10 +81,6 @@ fn setup(mut commands: Commands) {
     ));
 }
 
-#[derive(Component)]
-#[require(Transform)]
-struct Player;
-
 fn camera_follow(
     player: Query<&Transform, With<Player>>,
     mut camera: Query<&mut Transform, (With<Camera>, Without<Player>)>,
@@ -114,18 +90,23 @@ fn camera_follow(
 
 fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<BaseChunk>) {
     let world_transform = player.single().unwrap();
-    if world_transform.chunk != base.0 {
-        base.0 = world_transform.chunk;
+    let chunk = IVec2::from(
+        world_transform
+            .translation
+            .div_euclid_int(CHUNK_SIZE as i64),
+    );
+    if chunk != base.0 {
+        base.0 = chunk;
     }
 }
 
 fn player_move(
     time: Res<Time>,
-    mut player: Query<&mut Rigidbody, With<Player>>,
+    mut player: Query<&mut WorldTransform, With<Player>>,
     input: Res<InputState>,
     registry: Res<Registry<InputAction>>,
 ) {
-    let mut body = player.single_mut().unwrap();
+    let mut transform = player.single_mut().unwrap();
 
     let up = registry.lookup("base::up").unwrap();
     let down = registry.lookup("base::down").unwrap();
@@ -135,16 +116,12 @@ fn player_move(
     let jump = registry.lookup("base::jump").unwrap();
 
     let axes = input.vec2(right, left, up, down);
-    let speed = match input.pressed(jump) {
-        false => 64.0,
-        true => 256.0,
+    let speed = match input.pressed(fast) {
+        false => 8.0,
+        true => 64.0,
     };
 
-    body.acceleration += axes.normalize_or_zero() * speed * time.delta_secs();
-
-    if input.just_pressed(jump) {
-        body.apply_force(Vec2::Y * 512.0);
-    }
+    transform.translation += axes.normalize_or_zero() * speed * time.delta_secs();
 }
 
 fn zoom(
@@ -172,9 +149,9 @@ fn toggle_tile(
     input: Res<InputState>,
     registry: Res<Registry<InputAction>>,
 ) {
-    let player_pos = player.single().unwrap().clone().into();
+    let player_pos = player.single().unwrap().clone().translation.round();
     if input.just_pressed(registry.lookup("base::toggle").unwrap()) {
-        let tile = world.get_tile_mut(player_pos).unwrap();
+        let tile = world.get_tile_mut(player_pos.into()).unwrap();
         if tile.id == Id::ZERO {
             tile.id = Id::ONE;
         } else {

@@ -84,6 +84,7 @@ pub enum ModValidationError {
 }
 
 impl ModValidationError {
+    #[allow(dead_code)]
     /// Returns the IDs of the mods involved in the error
     pub fn mods(&self) -> Vec<&PathSegment> {
         match self {

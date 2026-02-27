@@ -1,4 +1,8 @@
-use crate::{Player, debug::DebugText, world::WorldTransform};
+use crate::{
+    debug::DebugText,
+    player::Player,
+    world::{CHUNK_SIZE, WorldTransform},
+};
 use bevy::prelude::*;
 
 use crate::AppState;
@@ -48,11 +52,11 @@ fn update_text(
     let mut chunk = chunk.single_mut().unwrap();
     let mut tile = tile.single_mut().unwrap();
 
-    let world_pos = player;
-    let chunk_pos = world_pos.chunk;
-    let tile_pos = world_pos.tile;
+    let world_pos = player.translation;
+    let chunk_pos = world_pos / CHUNK_SIZE as i64;
+    let tile_pos = world_pos % CHUNK_SIZE as i64;
 
     world.0 = format!("World: {:.2}\n", world_pos);
-    chunk.0 = format!("Chunk: {}\n", chunk_pos);
+    chunk.0 = format!("Chunk: {}\n", chunk_pos.floor());
     tile.0 = format!("Tile: {:.2}\n", tile_pos);
 }

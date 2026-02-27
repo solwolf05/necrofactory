@@ -66,10 +66,6 @@ impl CompleteDefs {
     pub fn len(&self) -> usize {
         self.inputs + self.tiles
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.inputs == 0 && self.tiles == 0
-    }
 }
 
 #[cfg(feature = "time")]

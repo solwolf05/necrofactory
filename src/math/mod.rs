@@ -1,7 +1,3 @@
-mod fixed;
-mod hybrid;
-mod hybrid_vec2;
+mod fixed_vec2;
 
-pub use fixed::Fixed;
-pub use hybrid::Hybrid;
-pub use hybrid_vec2::HybridVec2;
+pub use fixed_vec2::FixedVec2;

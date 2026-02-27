@@ -1,4 +1,4 @@
-use crate::{Player, debug::DebugText, physics::Rigidbody};
+use crate::{debug::DebugText, physics::Rigidbody, player::Player};
 use bevy::prelude::*;
 
 use crate::AppState;
@@ -35,6 +35,6 @@ fn update_text(
     let mut acceleration = acceleration.single_mut().unwrap();
     let mut velocity = velocity.single_mut().unwrap();
 
-    acceleration.0 = format!("Acceleration: {}\n", player.acceleration);
-    velocity.0 = format!("Velocity: {}\n", player.velocity);
+    acceleration.0 = format!("Acceleration: {:.2}\n", player.acceleration);
+    velocity.0 = format!("Velocity: {:.2}\n", player.velocity);
 }

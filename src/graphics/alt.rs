@@ -2,9 +2,8 @@ use bevy::{platform::collections::HashSet, prelude::*};
 
 use crate::{
     AppState,
-    math::FixedVec2,
     modding::{Id, TileSprites},
-    world::{BaseChunk, CHUNK_SIZE, RebaseSet, World, WorldTransform, chunk::TilePosition},
+    world::{BaseChunk, RebaseSet, World, WorldTransform, chunk::TilePosition},
 };
 
 pub struct GraphicsPlugin;
@@ -95,13 +94,10 @@ fn spawn_chunks(
         render_chunk.with_children(|spawner| {
             for tile_pos in 0..=255 {
                 let tile_pos = TilePosition::new(tile_pos);
-                let (x, y) = tile_pos.to_xy();
-                let translation =
-                    FixedVec2::new(x.into(), y.into()) + (chunk_pos * CHUNK_SIZE as i32);
                 spawner.spawn((
                     RenderTile(tile_pos),
                     Sprite::default(),
-                    WorldTransform::from_translation(translation),
+                    WorldTransform::new(chunk_pos, tile_pos.into()),
                 ));
             }
         });

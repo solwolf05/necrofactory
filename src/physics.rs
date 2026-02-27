@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     modding::Id,
-    world::{TILE_SIZE, World, WorldPosition, WorldTransform},
+    world::{TILE_SIZE, World, WorldTransform},
 };
 
 const GRAVITY: f32 = -9.8;
@@ -54,7 +54,7 @@ fn run_physics(mut query: Query<&mut Rigidbody>, time: Res<Time<Fixed>>) {
 fn update_transforms(mut query: Query<(&mut WorldTransform, &Rigidbody)>, time: Res<Time<Fixed>>) {
     let dt = time.delta_secs();
     for (mut transform, body) in query.iter_mut() {
-        *transform += body.velocity * dt;
+        transform.translation += body.velocity * dt;
     }
 }
 

@@ -3,11 +3,7 @@ use bevy::prelude::*;
 use crate::{
     AppState,
     modding::Id,
-    world::{
-        BaseChunk, World,
-        chunk::{Chunk, TilePosition},
-        tile::Tile,
-    },
+    world::{BaseChunk, World, chunk::Chunk, tile::Tile},
 };
 
 pub struct WorldGenPlugin;
@@ -42,8 +38,9 @@ pub fn dynamic_gen(world: ResMut<World>, base: Res<BaseChunk>) {
 
 pub fn test_gen_chunk(world: &mut World, pos: IVec2) {
     let mut chunk = Chunk::empty();
-    if pos.y < 0 {
-        for tile in chunk.iter_mut() {
+    for tile in chunk.iter_mut() {
+        let factor = pos.length_squared() as f32 / 100.0 / 100.0;
+        if rand::random::<f32>() < factor {
             *tile = Tile { id: Id::ONE };
         }
     }
