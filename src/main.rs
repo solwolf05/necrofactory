@@ -34,8 +34,8 @@ fn main() -> AppExit {
             InputPlugin,
             DebugPlugin,
             CoordinatePlugin,
-            // PhysicsDebugPlugin,
-            // PhysicsPlugin,
+            PhysicsDebugPlugin,
+            PhysicsPlugin,
         ))
         .insert_state(AppState::Boot)
         .add_systems(OnEnter(AppState::Boot), boot)
@@ -77,7 +77,11 @@ fn setup(mut commands: Commands) {
         Player,
         WorldTransform::default(),
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
-        Rigidbody::new(1.0),
+        Rigidbody {
+            mass: 1.0,
+            restitution: 0.1,
+            ..Default::default()
+        },
     ));
 }
 
@@ -102,11 +106,11 @@ fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<
 
 fn player_move(
     time: Res<Time>,
-    mut player: Query<&mut WorldTransform, With<Player>>,
+    mut player: Query<&mut Rigidbody, With<Player>>,
     input: Res<InputState>,
     registry: Res<Registry<InputAction>>,
 ) {
-    let mut transform = player.single_mut().unwrap();
+    let mut body = player.single_mut().unwrap();
 
     let up = registry.lookup("base::up").unwrap();
     let down = registry.lookup("base::down").unwrap();
@@ -120,8 +124,12 @@ fn player_move(
         false => 8.0,
         true => 64.0,
     };
+    if input.just_pressed(jump) {
+        body.apply_force(Vec2::Y * 512.0);
+    }
 
-    transform.translation += axes.normalize_or_zero() * speed * time.delta_secs();
+    // transform.translation += axes.normalize_or_zero() * speed * time.delta_secs();
+    body.acceleration += axes.normalize_or_zero() * speed * time.delta_secs() * 8.0;
 }
 
 fn zoom(

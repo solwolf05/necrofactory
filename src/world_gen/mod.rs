@@ -39,7 +39,8 @@ pub fn dynamic_gen(world: ResMut<World>, base: Res<BaseChunk>) {
 pub fn test_gen_chunk(world: &mut World, pos: IVec2) {
     let mut chunk = Chunk::empty();
     for tile in chunk.iter_mut() {
-        let factor = pos.length_squared() as f32 / 100.0 / 100.0;
+        let radius = 10.0;
+        let factor = pos.length_squared() as f32 / radius / radius;
         if rand::random::<f32>() < factor {
             *tile = Tile { id: Id::ONE };
         }
