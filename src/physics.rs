@@ -6,7 +6,7 @@ use crate::{
     world::{World, WorldTransform},
 };
 
-const GRAVITY: f32 = -9.8;
+const GRAVITY: f32 = 9.8;
 
 pub struct PhysicsPlugin;
 
@@ -16,38 +16,63 @@ impl Plugin for PhysicsPlugin {
     }
 }
 
+#[derive(Debug, Component)]
+pub struct Mass(pub f32);
+
+impl Default for Mass {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
 #[derive(Debug, Default, Component)]
-pub struct Rigidbody {
-    pub mass: f32,
-    pub acceleration: Vec2,
-    pub velocity: Vec2,
-    pub restitution: f32,
-}
+pub struct Restitution(pub f32);
 
-impl Rigidbody {
-    pub fn new(mass: f32) -> Self {
-        Self {
-            mass,
-            acceleration: Vec2::ZERO,
-            velocity: Vec2::ZERO,
-            restitution: 0.0,
-        }
+#[derive(Debug, Default, Component)]
+pub struct Damping(pub f32);
+
+#[derive(Debug, Default, Component)]
+#[require(WorldTransform, Damping)]
+pub struct Velocity(pub Vec2);
+
+#[derive(Debug, Default, Component)]
+#[require(Velocity)]
+pub struct Acceleration(pub Vec2);
+
+#[derive(Debug, Default, Component)]
+#[require(Mass, Restitution, Velocity, Acceleration)]
+pub struct Rigidbody;
+
+#[derive(Debug, Default, Component)]
+pub struct Aabb(pub Vec2);
+
+impl Aabb {
+    pub fn half_x(&self) -> f32 {
+        self.0.x / 2.0
     }
 
-    pub fn apply_force(&mut self, force: Vec2) {
-        self.acceleration += force / self.mass;
+    pub fn half_y(&self) -> f32 {
+        self.0.y / 2.0
     }
 }
 
-fn run_physics(mut query: Query<&mut Rigidbody>, time: Res<Time<Fixed>>) {
+fn run_physics(
+    mut query: Query<(
+        &mut WorldTransform,
+        &mut Velocity,
+        &mut Acceleration,
+        &Damping,
+    )>,
+    time: Res<Time<Fixed>>,
+) {
     let dt = time.delta_secs();
-    for mut body in query.iter_mut() {
-        body.acceleration += Vec2::Y * GRAVITY;
+    for (mut transform, mut velocity, mut acceleration, damping) in query.iter_mut() {
+        velocity.0 *= 1.0 - damping.0 * dt;
+        acceleration.0 += Vec2::NEG_Y * GRAVITY;
+        velocity.0 += acceleration.0 * dt;
+        transform.translation += velocity.0 * dt;
 
-        let acceleration = body.acceleration;
-        body.velocity += acceleration * dt;
-
-        body.acceleration = Vec2::ZERO;
+        acceleration.0 = Vec2::ZERO;
     }
 }
 
@@ -57,92 +82,4 @@ fn collision_system(
     time: Res<Time<Fixed>>,
 ) {
     let dt = time.delta_secs();
-
-    for (mut body, mut transform) in query.iter_mut() {
-        //
-        // ----- X AXIS -----
-        //
-        let dx = body.velocity.x * dt;
-        transform.translation.x += dx;
-
-        let min_x = (transform.translation.x + I32F32::MIN_POSITIVE)
-            .floor()
-            .into();
-        let max_x = (transform.translation.x + I32F32::ONE - I32F32::MIN_POSITIVE)
-            .floor()
-            .into();
-        let min_y = (transform.translation.y + I32F32::MIN_POSITIVE)
-            .floor()
-            .into();
-        let max_y = (transform.translation.y + I32F32::ONE - I32F32::MIN_POSITIVE)
-            .floor()
-            .into();
-
-        if body.velocity.x > 0.0 {
-            for y in min_y..=max_y {
-                let tile = IVec2::new(max_x, y);
-                if let Some(t) = world.get_tile(tile.into())
-                    && t.id != Id::ZERO
-                {
-                    transform.translation.x = (tile.x - 1).into();
-                    body.velocity.x = body.velocity.x * -body.restitution;
-                    break;
-                }
-            }
-        } else if body.velocity.x < 0.0 {
-            for y in min_y..=max_y {
-                let tile = IVec2::new(min_x, y);
-                if let Some(t) = world.get_tile(tile.into())
-                    && t.id != Id::ZERO
-                {
-                    transform.translation.x = (tile.x + 1).into();
-                    body.velocity.x = body.velocity.x * -body.restitution;
-                    break;
-                }
-            }
-        }
-
-        //
-        // ----- Y AXIS -----
-        //
-        let dy = body.velocity.y * dt;
-        transform.translation.y += dy;
-
-        let min_x = (transform.translation.x + I32F32::MIN_POSITIVE)
-            .floor()
-            .into();
-        let max_x = (transform.translation.x + I32F32::ONE - I32F32::MIN_POSITIVE)
-            .floor()
-            .into();
-        let min_y = (transform.translation.y + I32F32::MIN_POSITIVE)
-            .floor()
-            .into();
-        let max_y = (transform.translation.y + I32F32::ONE - I32F32::MIN_POSITIVE)
-            .floor()
-            .into();
-
-        if body.velocity.y > 0.0 {
-            for x in min_x..=max_x {
-                let tile = IVec2::new(x, max_y);
-                if let Some(t) = world.get_tile(tile.into())
-                    && t.id != Id::ZERO
-                {
-                    transform.translation.y = (tile.y - 1).into();
-                    body.velocity.y = body.velocity.y * -body.restitution;
-                    break;
-                }
-            }
-        } else if body.velocity.y < 0.0 {
-            for x in min_x..=max_x {
-                let tile = IVec2::new(x, min_y);
-                if let Some(t) = world.get_tile(tile.into())
-                    && t.id != Id::ZERO
-                {
-                    transform.translation.y = (tile.y + 1).into();
-                    body.velocity.y = body.velocity.y * -body.restitution;
-                    break;
-                }
-            }
-        }
-    }
 }

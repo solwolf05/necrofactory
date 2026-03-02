@@ -6,7 +6,7 @@ use necrofactory::{
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState},
     modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry},
-    physics::{PhysicsPlugin, Rigidbody},
+    physics::{Acceleration, Damping, PhysicsPlugin, Rigidbody},
     player::Player,
     world::{BaseChunk, CHUNK_SIZE, RebaseSet, World, WorldPlugin, WorldTransform},
     world_gen::WorldGenPlugin,
@@ -77,11 +77,8 @@ fn setup(mut commands: Commands) {
         Player,
         WorldTransform::default(),
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
-        Rigidbody {
-            mass: 1.0,
-            restitution: 0.1,
-            ..Default::default()
-        },
+        Rigidbody,
+        Damping(0.1),
     ));
 }
 
@@ -106,11 +103,11 @@ fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<
 
 fn player_move(
     time: Res<Time>,
-    mut player: Query<&mut Rigidbody, With<Player>>,
+    mut acceleration: Query<&mut Acceleration, With<Player>>,
     input: Res<InputState>,
     registry: Res<Registry<InputAction>>,
 ) {
-    let mut body = player.single_mut().unwrap();
+    let mut acceleration = acceleration.single_mut().unwrap();
 
     let up = registry.lookup("base::up").unwrap();
     let down = registry.lookup("base::down").unwrap();
@@ -125,11 +122,11 @@ fn player_move(
         true => 64.0,
     };
     if input.just_pressed(jump) {
-        body.apply_force(Vec2::Y * 512.0);
+        acceleration.0 += Vec2::Y * 512.0;
     }
 
     // transform.translation += axes.normalize_or_zero() * speed * time.delta_secs();
-    body.acceleration += axes.normalize_or_zero() * speed * time.delta_secs() * 8.0;
+    acceleration.0 += axes.normalize_or_zero() * speed * time.delta_secs() * 8.0;
 }
 
 fn zoom(

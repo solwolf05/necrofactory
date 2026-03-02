@@ -38,11 +38,18 @@ pub fn dynamic_gen(world: ResMut<World>, base: Res<BaseChunk>) {
 
 pub fn test_gen_chunk(world: &mut World, pos: IVec2) {
     let mut chunk = Chunk::empty();
-    for tile in chunk.iter_mut() {
-        let radius = 10.0;
-        let factor = pos.length_squared() as f32 / radius / radius;
-        if rand::random::<f32>() < factor {
+    let chunk_factor = rand::random::<f32>() / 2.0 + 0.5;
+    if pos.y < 0 {
+        for tile in chunk.iter_mut() {
             *tile = Tile { id: Id::ONE };
+        }
+    } else {
+        for tile in chunk.iter_mut() {
+            let radius = 10.0;
+            let factor = pos.y as f32 / radius / radius * chunk_factor;
+            if rand::random::<f32>() < factor {
+                *tile = Tile { id: Id::ONE };
+            }
         }
     }
     world.insert_chunk(pos, chunk);

@@ -1,4 +1,8 @@
-use crate::{debug::DebugText, physics::Rigidbody, player::Player};
+use crate::{
+    debug::DebugText,
+    physics::{Acceleration, Rigidbody, Velocity},
+    player::Player,
+};
 use bevy::prelude::*;
 
 use crate::AppState;
@@ -27,14 +31,14 @@ fn setup(mut commands: Commands, text_root: Query<Entity, With<DebugText>>) {
 }
 
 fn update_text(
-    player: Query<&Rigidbody, With<Player>>,
-    mut acceleration: Query<&mut TextSpan, With<AccelerationText>>,
-    mut velocity: Query<&mut TextSpan, (With<VelocityText>, Without<AccelerationText>)>,
+    player: Query<(&Velocity, &Acceleration), With<Player>>,
+    mut acceleration_text: Query<&mut TextSpan, With<AccelerationText>>,
+    mut velocity_text: Query<&mut TextSpan, (With<VelocityText>, Without<AccelerationText>)>,
 ) {
-    let player = player.single().unwrap();
-    let mut acceleration = acceleration.single_mut().unwrap();
-    let mut velocity = velocity.single_mut().unwrap();
+    let (velocity, acceleration) = player.single().unwrap();
+    let mut acceleration_text = acceleration_text.single_mut().unwrap();
+    let mut velocity_text = velocity_text.single_mut().unwrap();
 
-    acceleration.0 = format!("Acceleration: {:.2}\n", player.acceleration);
-    velocity.0 = format!("Velocity: {:.2}\n", player.velocity);
+    acceleration_text.0 = format!("Acceleration: {:.2}\n", acceleration.0);
+    velocity_text.0 = format!("Velocity: {:.2}\n", velocity.0);
 }
