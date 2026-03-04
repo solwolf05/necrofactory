@@ -5,7 +5,7 @@ use bevy::state::state::States;
 pub mod debug;
 pub mod graphics;
 pub mod input;
-pub mod math;
+// pub mod math;
 pub mod modding;
 pub mod physics;
 pub mod player;

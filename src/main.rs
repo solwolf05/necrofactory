@@ -8,7 +8,7 @@ use necrofactory::{
     modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry},
     physics::{Acceleration, Damping, PhysicsPlugin, Rigidbody},
     player::Player,
-    world::{BaseChunk, CHUNK_SIZE, RebaseSet, World, WorldPlugin, WorldTransform},
+    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform},
     world_gen::WorldGenPlugin,
 };
 
@@ -91,11 +91,7 @@ fn camera_follow(
 
 fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<BaseChunk>) {
     let world_transform = player.single().unwrap();
-    let chunk = IVec2::from(
-        world_transform
-            .translation
-            .div_euclid_int(CHUNK_SIZE as i32),
-    );
+    let chunk = world_transform.translation.chunk;
     if chunk != base.0 {
         base.0 = chunk;
     }

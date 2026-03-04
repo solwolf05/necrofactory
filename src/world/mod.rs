@@ -10,7 +10,7 @@ use crate::world::{
     transform::{apply_rebase, apply_world_transform},
 };
 
-pub use transform::{BaseChunk, RebaseSet, WorldTransform};
+pub use transform::{BaseChunk, HybridVec2, RebaseSet, WorldTransform};
 
 pub mod chunk;
 pub mod machine;
