@@ -3095,6 +3095,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "log",
+ "noiz",
  "rand",
  "ron",
  "semver",
@@ -3113,6 +3114,17 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
+]
+
+[[package]]
+name = "noiz"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a91cd88947d648a58f0f7820781e00e8c24fecfa7b00eca62ca3b7b7afe92395"
+dependencies = [
+ "bevy_math",
+ "bevy_reflect",
+ "serde",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
-mod fixed_vec2;
-mod i32f32;
+mod hybrid;
+mod hybrid_vec2;
 
-pub use fixed_vec2::FixedVec2;
-pub use i32f32::I32F32;
+pub use hybrid::Hybrid;
+pub use hybrid_vec2::HybridVec2;

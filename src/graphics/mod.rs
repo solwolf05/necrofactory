@@ -2,8 +2,9 @@ use bevy::{platform::collections::HashSet, prelude::*};
 
 use crate::{
     AppState,
+    math::HybridVec2,
     modding::{Id, TileSprites},
-    world::{BaseChunk, HybridVec2, RebaseSet, World, WorldTransform, chunk::TilePosition},
+    world::{BaseChunk, RebaseSet, World, WorldTransform, chunk::TilePosition},
 };
 
 pub struct GraphicsPlugin;
@@ -15,7 +16,8 @@ impl Plugin for GraphicsPlugin {
             (spawn_chunks.before(RebaseSet), update_sprites)
                 .chain()
                 .run_if(in_state(AppState::InGame)),
-        );
+        )
+        .add_systems(OnExit(AppState::InGame), cleanup);
     }
 }
 
@@ -74,7 +76,7 @@ fn spawn_chunks(
     // Determine which chunks to spawn vs unload
     let mut chunks_in_range = HashSet::new();
 
-    for (entity, render_chunk) in &render_chunks {
+    for (entity, render_chunk) in render_chunks {
         chunks_in_range.insert(render_chunk.0);
 
         // If this chunk is no longer in range, despawn it
@@ -96,7 +98,7 @@ fn spawn_chunks(
                 let tile_pos = TilePosition::new(tile_pos);
                 let (x, y) = tile_pos.to_xy();
                 let tile_vec2 = Vec2::new(x as f32, y as f32);
-                let translation = HybridVec2::new(chunk_pos, tile_vec2);
+                let translation = HybridVec2::from_chunk_tile(chunk_pos, tile_vec2);
                 spawner.spawn((
                     RenderTile(tile_pos),
                     Sprite::default(),
@@ -104,6 +106,12 @@ fn spawn_chunks(
                 ));
             }
         });
+    }
+}
+
+fn cleanup(mut commands: Commands, query: Query<Entity, With<RenderChunk>>) {
+    for entity in query {
+        commands.entity(entity).despawn();
     }
 }
 

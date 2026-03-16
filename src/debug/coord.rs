@@ -49,8 +49,8 @@ fn update_text(
     let mut tile = tile.single_mut().unwrap();
 
     let world_pos = player.translation;
-    let chunk_pos = world_pos.chunk;
-    let tile_pos = world_pos.tile;
+    let chunk_pos = world_pos.chunk();
+    let tile_pos = world_pos.tile();
 
     world.0 = format!("World: {:.2}\n", world_pos);
     chunk.0 = format!("Chunk: {}\n", chunk_pos);

@@ -17,10 +17,12 @@ impl Tile {
 }
 
 impl Tile {
+    #[inline]
     pub fn is_some(&self) -> bool {
         self.id != Id::ZERO
     }
 
+    #[inline]
     pub fn is_none(&self) -> bool {
         self.id == Id::ZERO
     }

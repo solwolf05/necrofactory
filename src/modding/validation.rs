@@ -661,7 +661,7 @@ mod tests {
             found: None,
         };
 
-        let expected = "Mod 'mod_a' requires 'mod_b' version '^1.0', but it is not present";
+        let expected = "mod 'mod_a' requires 'mod_b' version '^1.0', but it is not present";
         assert_eq!(error.to_string(), expected);
 
         let error_with_found = ModValidationError::VersionMismatch {
@@ -671,7 +671,7 @@ mod tests {
             found: Some("1.0.0".to_string()),
         };
 
-        let expected = "Mod 'mod_a' requires 'mod_b' version '^2.0', but found version '1.0.0'";
+        let expected = "mod 'mod_a' requires 'mod_b' version '^2.0', but found version '1.0.0'";
         assert_eq!(error_with_found.to_string(), expected);
     }
 
@@ -685,7 +685,7 @@ mod tests {
             ],
         };
 
-        let expected = "Circular dependency detected: a -> b -> c";
+        let expected = "circular dependency detected: a -> b -> c";
         assert_eq!(error.to_string(), expected);
     }
 

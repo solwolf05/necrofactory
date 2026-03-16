@@ -10,7 +10,7 @@ use crate::world::{
     transform::{apply_rebase, apply_world_transform},
 };
 
-pub use transform::{BaseChunk, HybridVec2, RebaseSet, WorldTransform};
+pub use transform::{BaseChunk, RebaseSet, WorldTransform};
 
 pub mod chunk;
 pub mod machine;
@@ -19,10 +19,10 @@ pub mod tile;
 mod transform;
 
 /// Tile size in tiles (n by n)
-pub const CHUNK_SIZE: u32 = 16;
+pub const CHUNK_SIZE: i32 = 16;
 
 /// Tile size in pixels (n by n)
-pub const TILE_SIZE: u32 = 16;
+pub const TILE_SIZE: i32 = 16;
 
 pub struct WorldPlugin;
 
@@ -79,5 +79,9 @@ impl World {
         self.chunks
             .get_mut(&chunk.as_ivec2())
             .map(|chunk| chunk.get_mut(TilePosition::from_xy(tile.x as u8, tile.y as u8)))
+    }
+
+    pub fn contains_tile(&self, pos: I64Vec2) -> bool {
+        self.get_tile(pos).filter(|tile| tile.is_some()).is_some()
     }
 }

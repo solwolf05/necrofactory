@@ -6,8 +6,9 @@ use necrofactory::{
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState},
     modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry},
-    physics::{Acceleration, Damping, PhysicsPlugin, Rigidbody},
+    physics::{Acceleration, Collider, Damping, PhysicsPlugin, Restitution, Rigidbody},
     player::Player,
+    rand::RandPlugin,
     world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform},
     world_gen::WorldGenPlugin,
 };
@@ -28,6 +29,7 @@ fn main() -> AppExit {
                 })
                 .set(ImagePlugin::default_nearest()),
             ModPlugin,
+            RandPlugin { seed: 1 },
             WorldPlugin,
             WorldGenPlugin,
             GraphicsPlugin,
@@ -40,7 +42,7 @@ fn main() -> AppExit {
         .insert_state(AppState::Boot)
         .add_systems(OnEnter(AppState::Boot), boot)
         .add_systems(OnEnter(AppState::InGame), setup)
-        .add_systems(Update, esc_exit)
+        .add_systems(Update, (esc_exit, mod_reload))
         .add_systems(
             Update,
             (zoom, toggle_tile).run_if(in_state(AppState::InGame)),
@@ -78,7 +80,9 @@ fn setup(mut commands: Commands) {
         WorldTransform::default(),
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
         Rigidbody,
+        Collider(Vec2::ONE * 1.0),
         Damping(0.1),
+        Restitution(0.1),
     ));
 }
 
@@ -91,7 +95,7 @@ fn camera_follow(
 
 fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<BaseChunk>) {
     let world_transform = player.single().unwrap();
-    let chunk = world_transform.translation.chunk;
+    let chunk = world_transform.translation.chunk();
     if chunk != base.0 {
         base.0 = chunk;
     }
@@ -117,11 +121,10 @@ fn player_move(
         false => 8.0,
         true => 64.0,
     };
-    if input.just_pressed(jump) {
-        acceleration.0 += Vec2::Y * 512.0;
+    if input.pressed(jump) {
+        acceleration.0 += Vec2::Y * 1024.0 * time.delta_secs();
     }
 
-    // transform.translation += axes.normalize_or_zero() * speed * time.delta_secs();
     acceleration.0 += axes.normalize_or_zero() * speed * time.delta_secs() * 8.0;
 }
 
@@ -158,6 +161,12 @@ fn toggle_tile(
         } else {
             tile.id = Id::ZERO;
         }
+    }
+}
+
+fn mod_reload(input: Res<ButtonInput<KeyCode>>, mut state: ResMut<NextState<AppState>>) {
+    if input.just_pressed(KeyCode::KeyR) {
+        state.set(AppState::ModLoading);
     }
 }
 
