@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
-use crate::AppState;
+use crate::GameState;
 
-pub fn finalize(mut state: ResMut<NextState<AppState>>) {
+pub fn finalize(mut state: ResMut<NextState<GameState>>) {
     info!("Mod loading complete");
-    state.set(AppState::InGame);
+    state.set(GameState::InGame);
 }

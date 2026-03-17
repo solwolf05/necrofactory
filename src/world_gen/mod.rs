@@ -1,12 +1,10 @@
 use bevy::prelude::*;
-use noiz::NoiseFunction;
 
 use crate::{
-    AppState,
+    GameState,
     modding::Id,
-    rand::{MasterSeed, WorldHeightRng},
     world::{
-        BaseChunk, CHUNK_SIZE, World,
+        BaseChunk, World,
         chunk::{Chunk, TilePosition},
         tile::Tile,
     },
@@ -16,33 +14,23 @@ pub struct WorldGenPlugin;
 
 impl Plugin for WorldGenPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, dynamic_gen.run_if(in_state(AppState::InGame)));
+        app.add_systems(Update, dynamic_gen.run_if(in_state(GameState::InGame)));
     }
 }
 
-pub fn dev_gen(world: ResMut<World>) {
-    let world = world.into_inner();
-    for x in -1000..=1000 {
-        for y in -1000..=1000 {
-            let pos = IVec2::new(x, y);
-            // test_gen_chunk(world, pos, 0);
-        }
-    }
-}
-
-pub fn dynamic_gen(world: ResMut<World>, base: Res<BaseChunk>, mut seed: ResMut<WorldHeightRng>) {
+pub fn dynamic_gen(world: ResMut<World>, base: Res<BaseChunk>) {
     let world = world.into_inner();
     for cy in -8..=8 {
         for cx in -8..=8 {
             let chunk_pos = base.0 + IVec2::new(cx, cy);
             if !world.contains_chunk(chunk_pos) {
-                test_gen_chunk(world, chunk_pos, &mut *seed);
+                test_gen_chunk(world, chunk_pos);
             }
         }
     }
 }
 
-pub fn test_gen_chunk(world: &mut World, pos: IVec2, rng: &mut WorldHeightRng) {
+pub fn test_gen_chunk(world: &mut World, pos: IVec2) {
     let mut chunk = Chunk::empty();
     let chunk_factor = rand::random::<f32>() / 2.0 + 0.5;
     if pos.y < -1 {
@@ -51,12 +39,8 @@ pub fn test_gen_chunk(world: &mut World, pos: IVec2, rng: &mut WorldHeightRng) {
         }
     } else if pos.y == -1 {
         for x in 0..=15 {
-            let height = rng
-                .1
-                .evaluate(i32::cast_unsigned((pos.x * 16) + x as i32), &mut rng.0)
-                * 16.0;
-            info!("{}", height);
-            for y in 0..height.floor() as u8 {
+            let height = rand::random_range(0..=15);
+            for y in 0..height as u8 {
                 chunk.insert(TilePosition::from_xy(x, y), Tile::new(Id::ONE));
             }
         }

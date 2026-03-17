@@ -1,14 +1,14 @@
 use crate::{debug::DebugText, player::Player, world::WorldTransform};
 use bevy::prelude::*;
 
-use crate::AppState;
+use crate::GameState;
 
 pub struct CoordinatePlugin;
 
 impl Plugin for CoordinatePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(AppState::InGame), setup)
-            .add_systems(Update, update_text.run_if(in_state(AppState::InGame)));
+        app.add_systems(OnEnter(GameState::InGame), setup.after(super::setup))
+            .add_systems(Update, update_text.run_if(in_state(GameState::InGame)));
     }
 }
 

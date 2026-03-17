@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::modding::registration::{log_registration_completion, start_registration_time};
 use crate::{
-    AppState,
+    GameState,
     input::InputAction,
     modding::{
         asset_loading::{begin_asset_loading, check_assets_loaded},
@@ -91,7 +91,7 @@ impl Plugin for ModAssetSourcePlugin {
 }
 
 #[derive(SubStates, Debug, Default, Clone, Eq, PartialEq, Hash)]
-#[source(AppState = AppState::ModLoading)]
+#[source(GameState = GameState::ModLoading)]
 pub enum ModLoadState {
     #[default]
     Discover,

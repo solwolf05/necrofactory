@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::GameState;
+
 pub mod coord;
 pub mod physics;
 
@@ -7,7 +9,8 @@ pub struct DebugPlugin;
 
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup);
+        app.add_systems(OnEnter(GameState::InGame), setup)
+            .add_systems(OnExit(GameState::InGame), cleanup);
     }
 }
 
@@ -25,4 +28,8 @@ fn setup(mut commands: Commands) {
         },
         DebugText,
     ));
+}
+
+fn cleanup(mut commands: Commands, text: Query<Entity, With<DebugText>>) {
+    commands.entity(text.single().unwrap()).despawn();
 }

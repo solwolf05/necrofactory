@@ -1,8 +1,5 @@
-use bevy::{math::VectorSpace, prelude::*};
-use noiz::{
-    prelude::{common_noise::Perlin, *},
-    rng::NoiseRng,
-};
+use bevy::prelude::*;
+use noiz::{prelude::*, rng::NoiseRng};
 
 #[derive(Debug, Default)]
 pub struct RandPlugin {

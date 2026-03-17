@@ -1,18 +1,18 @@
 use crate::{
     debug::DebugText,
-    physics::{Acceleration, Rigidbody, Velocity},
+    physics::{Acceleration, Velocity},
     player::Player,
 };
 use bevy::prelude::*;
 
-use crate::AppState;
+use crate::GameState;
 
 pub struct PhysicsDebugPlugin;
 
 impl Plugin for PhysicsDebugPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(AppState::InGame), setup)
-            .add_systems(Update, update_text.run_if(in_state(AppState::InGame)));
+        app.add_systems(OnEnter(GameState::InGame), setup.after(super::setup))
+            .add_systems(Update, update_text.run_if(in_state(GameState::InGame)));
     }
 }
 

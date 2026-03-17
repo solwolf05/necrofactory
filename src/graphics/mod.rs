@@ -1,7 +1,7 @@
 use bevy::{platform::collections::HashSet, prelude::*};
 
 use crate::{
-    AppState,
+    GameState,
     math::HybridVec2,
     modding::{Id, TileSprites},
     world::{BaseChunk, RebaseSet, World, WorldTransform, chunk::TilePosition},
@@ -15,9 +15,9 @@ impl Plugin for GraphicsPlugin {
             PostUpdate,
             (spawn_chunks.before(RebaseSet), update_sprites)
                 .chain()
-                .run_if(in_state(AppState::InGame)),
+                .run_if(in_state(GameState::InGame)),
         )
-        .add_systems(OnExit(AppState::InGame), cleanup);
+        .add_systems(OnExit(GameState::InGame), cleanup);
     }
 }
 

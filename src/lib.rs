@@ -15,7 +15,7 @@ pub mod world;
 pub mod world_gen;
 
 #[derive(States, Debug, Default, Clone, Eq, PartialEq, Hash)]
-pub enum AppState {
+pub enum GameState {
     #[default]
     Boot,
     ModLoading,

@@ -1,7 +1,13 @@
-use bevy::{camera::ScalingMode, prelude::*, window::WindowResolution};
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use bevy::{
+    camera::ScalingMode,
+    prelude::*,
+    window::{PresentMode, WindowMode, WindowResolution},
+};
 
 use necrofactory::{
-    AppState,
+    GameState,
     debug::{DebugPlugin, coord::CoordinatePlugin, physics::PhysicsDebugPlugin},
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState},
@@ -21,8 +27,13 @@ fn main() -> AppExit {
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: "Necrofactory".to_owned(),
+                        #[cfg(debug_assertions)]
+                        mode: WindowMode::Windowed,
+                        #[cfg(debug_assertions)]
                         resolution: WindowResolution::new(1920, 1080),
-                        present_mode: bevy::window::PresentMode::AutoNoVsync,
+                        #[cfg(not(debug_assertions))]
+                        mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
+                        present_mode: PresentMode::AutoNoVsync,
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -39,29 +50,30 @@ fn main() -> AppExit {
             PhysicsDebugPlugin,
             PhysicsPlugin,
         ))
-        .insert_state(AppState::Boot)
-        .add_systems(OnEnter(AppState::Boot), boot)
-        .add_systems(OnEnter(AppState::InGame), setup)
+        .insert_state(GameState::Boot)
+        .add_systems(OnEnter(GameState::Boot), boot)
+        .add_systems(OnEnter(GameState::InGame), setup)
+        .add_systems(OnExit(GameState::InGame), cleanup)
         .add_systems(Update, (esc_exit, mod_reload))
         .add_systems(
             Update,
-            (zoom, toggle_tile).run_if(in_state(AppState::InGame)),
+            (zoom, toggle_tile).run_if(in_state(GameState::InGame)),
         )
         .add_systems(
             Update,
-            (player_move, player_follow).run_if(in_state(AppState::InGame)),
+            (player_move, player_follow).run_if(in_state(GameState::InGame)),
         )
         .add_systems(
             PostUpdate,
             camera_follow
                 .after(RebaseSet)
-                .run_if(in_state(AppState::InGame)),
+                .run_if(in_state(GameState::InGame)),
         )
         .run()
 }
 
-fn boot(mut state: ResMut<NextState<AppState>>) {
-    state.set(AppState::ModLoading);
+fn boot(mut state: ResMut<NextState<GameState>>) {
+    state.set(GameState::ModLoading);
 }
 
 fn setup(mut commands: Commands) {
@@ -84,6 +96,15 @@ fn setup(mut commands: Commands) {
         Damping(0.1),
         Restitution(0.1),
     ));
+}
+
+fn cleanup(
+    mut commands: Commands,
+    player: Query<Entity, With<Player>>,
+    camera: Query<Entity, With<Camera2d>>,
+) {
+    commands.entity(player.single().unwrap()).despawn();
+    commands.entity(camera.single().unwrap()).despawn();
 }
 
 fn camera_follow(
@@ -164,9 +185,9 @@ fn toggle_tile(
     }
 }
 
-fn mod_reload(input: Res<ButtonInput<KeyCode>>, mut state: ResMut<NextState<AppState>>) {
+fn mod_reload(input: Res<ButtonInput<KeyCode>>, mut state: ResMut<NextState<GameState>>) {
     if input.just_pressed(KeyCode::KeyR) {
-        state.set(AppState::ModLoading);
+        state.set(GameState::ModLoading);
     }
 }
 

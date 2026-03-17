@@ -1,8 +1,7 @@
-use bevy::{math::I64Vec2, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
-    math::{Hybrid, HybridVec2},
-    physics::collision::Rect,
+    physics::collision::Aabb,
     world::{World, WorldTransform},
 };
 
@@ -85,16 +84,19 @@ fn solve_tile_collisions(
 
     for (mut transform, mut vel, collider, restitution) in &mut query {
         let dt_vel = vel.0 * dt;
-        let steps = dt_vel.abs().max_element().ceil() as u32;
-        let steps = 20;
+        let step_size = 1.0;
+
+        let steps = (dt_vel.abs().max_element() / step_size).ceil() as u32;
+        let step_vel = dt_vel / steps as f32;
+
         for _ in 0..steps {
             // x axis
 
             let mut new_pos = transform.translation;
-            new_pos.x += vel.0.x * dt / steps as f32;
-            if Rect::new(new_pos, collider.0).overlap_world(world) {
+            new_pos.x += step_vel.x;
+            if Aabb::new(new_pos, collider.0).overlap_world(world) {
                 vel.0.x *= -restitution.0;
-                // vel.0.y *= 0.9;
+                vel.0.y *= 0.9;
             } else {
                 transform.translation.x = new_pos.x
             }
@@ -102,10 +104,10 @@ fn solve_tile_collisions(
             // y axis
 
             let mut new_pos = transform.translation;
-            new_pos.y += vel.0.y * dt / steps as f32;
-            if Rect::new(new_pos, collider.0).overlap_world(world) {
+            new_pos.y += step_vel.y;
+            if Aabb::new(new_pos, collider.0).overlap_world(world) {
                 vel.0.y *= -restitution.0;
-                // vel.0.x *= 0.9;
+                vel.0.x *= 0.9;
             } else {
                 transform.translation.y = new_pos.y
             }
