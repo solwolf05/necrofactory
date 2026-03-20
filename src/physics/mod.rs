@@ -96,7 +96,7 @@ fn solve_tile_collisions(
             new_pos.x += step_vel.x;
             if Aabb::new(new_pos, collider.0).overlap_world(world) {
                 vel.0.x *= -restitution.0;
-                vel.0.y *= 0.9;
+                vel.0.y *= 0.9 * dt;
             } else {
                 transform.translation.x = new_pos.x
             }
@@ -107,7 +107,7 @@ fn solve_tile_collisions(
             new_pos.y += step_vel.y;
             if Aabb::new(new_pos, collider.0).overlap_world(world) {
                 vel.0.y *= -restitution.0;
-                vel.0.x *= 0.9;
+                vel.0.x *= 1.0 - 1.0 * dt;
             } else {
                 transform.translation.y = new_pos.y
             }
