@@ -1,8 +1,8 @@
 (
-    path: "jump",
-    name: "Jump",
+    path: "hover",
+    name: "Hover",
     default: (
-        kind: KeyButton(Space),
+        kind: KeyButton(KeyH),
         shift: false,
         control: false,
         alt: false

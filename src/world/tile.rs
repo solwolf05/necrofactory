@@ -3,6 +3,7 @@ use crate::modding::Id;
 #[derive(Debug)]
 pub struct TileDef {
     pub sprite_path: String,
+    pub friction: f32,
 }
 
 #[derive(Debug, Clone, Copy)]

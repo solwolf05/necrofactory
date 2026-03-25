@@ -46,7 +46,7 @@ fn update_sprites(
                     *visibility = Visibility::Hidden;
                 } else {
                     *visibility = Visibility::Visible;
-                    sprite.image = sprites.complete.get(&id).unwrap().clone();
+                    sprite.image = sprites.get(id);
                 }
             }
         }

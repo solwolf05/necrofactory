@@ -1,10 +1,10 @@
 (
     path: "down",
     name: "Down",
-    default: InputBinding (
+    default: (
         kind: KeyButton(KeyS),
         shift: false,
         control: false,
-        alt: false,
-    ),
+        alt: false
+    )
 )

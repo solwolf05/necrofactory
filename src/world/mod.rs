@@ -66,22 +66,40 @@ impl World {
     }
 
     pub fn get_tile(&self, pos: I64Vec2) -> Option<&Tile> {
-        let chunk = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
-        let tile = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        let chunk_pos = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        let tile_pos = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
         self.chunks
-            .get(&chunk.as_ivec2())
-            .map(|chunk| chunk.get(TilePosition::from_xy(tile.x as u8, tile.y as u8)))
+            .get(&chunk_pos.as_ivec2())
+            .map(|chunk| chunk.get(TilePosition::from_xy(tile_pos.x as u8, tile_pos.y as u8)))
     }
 
     pub fn get_tile_mut(&mut self, pos: I64Vec2) -> Option<&mut Tile> {
-        let chunk = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
-        let tile = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        let chunk_pos = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        let tile_pos = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
         self.chunks
-            .get_mut(&chunk.as_ivec2())
-            .map(|chunk| chunk.get_mut(TilePosition::from_xy(tile.x as u8, tile.y as u8)))
+            .get_mut(&chunk_pos.as_ivec2())
+            .map(|chunk| chunk.get_mut(TilePosition::from_xy(tile_pos.x as u8, tile_pos.y as u8)))
     }
 
     pub fn contains_tile(&self, pos: I64Vec2) -> bool {
         self.get_tile(pos).filter(|tile| tile.is_some()).is_some()
+    }
+
+    pub fn insert_tile(&mut self, pos: I64Vec2, tile: Tile) {
+        let chunk_pos = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64)).as_ivec2();
+        let tile_pos = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
+            chunk.insert(
+                TilePosition::from_xy(tile_pos.x as u8, tile_pos.y as u8),
+                tile,
+            );
+        } else {
+            let mut chunk = Chunk::empty();
+            chunk.insert(
+                TilePosition::from_xy(tile_pos.x as u8, tile_pos.y as u8),
+                tile,
+            );
+            self.chunks.insert(chunk_pos, chunk);
+        }
     }
 }

@@ -3,9 +3,9 @@ use bevy::prelude::*;
 
 use crate::GameState;
 
-pub struct CoordinatePlugin;
+pub struct CoordinateDebugPlugin;
 
-impl Plugin for CoordinatePlugin {
+impl Plugin for CoordinateDebugPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::InGame), setup.after(super::setup))
             .add_systems(Update, update_text.run_if(in_state(GameState::InGame)));

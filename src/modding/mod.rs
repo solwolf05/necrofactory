@@ -9,7 +9,9 @@ use bevy::{
 
 use serde::Deserialize;
 
-use crate::modding::registration::{log_registration_completion, start_registration_time};
+use crate::modding::registration::{
+    log_registration_completion, register_defaults, start_registration_time,
+};
 use crate::{
     GameState,
     input::InputAction,
@@ -54,7 +56,10 @@ impl Plugin for ModPlugin {
             .add_systems(OnExit(ModLoadState::Discover), check_mods)
             .add_systems(OnEnter(ModLoadState::Validate), validate_mods)
             .add_systems(OnExit(ModLoadState::Validate), check_mod_load_order)
-            .add_systems(OnEnter(ModLoadState::Register), discover_definitions)
+            .add_systems(
+                OnEnter(ModLoadState::Register),
+                (discover_definitions, register_defaults),
+            )
             .add_systems(
                 Update,
                 (
@@ -70,6 +75,7 @@ impl Plugin for ModPlugin {
                 Update,
                 check_assets_loaded.run_if(in_state(ModLoadState::LoadAssets)),
             )
+            .add_systems(OnExit(ModLoadState::LoadAssets), asset_loading::cleanup)
             .add_systems(OnEnter(ModLoadState::Finalize), finalize)
             .add_systems(OnEnter(ModLoadState::Finalize), check_registries);
 

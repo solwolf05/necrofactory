@@ -128,7 +128,7 @@ impl<T> Id<T> {
     pub const ZERO: Self = Self(0, PhantomData);
     pub const ONE: Self = Self(1, PhantomData);
 
-    pub(super) const fn new(id: u32) -> Self {
+    pub(crate) const fn new(id: u32) -> Self {
         Self(id, PhantomData)
     }
 

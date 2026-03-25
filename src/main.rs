@@ -2,20 +2,24 @@
 
 use bevy::{
     camera::ScalingMode,
+    math::{I64Vec2, VectorSpace},
     prelude::*,
     window::{PresentMode, WindowMode, WindowResolution},
 };
 
 use necrofactory::{
     GameState,
-    debug::{DebugPlugin, coord::CoordinatePlugin, physics::PhysicsDebugPlugin},
+    debug::{
+        DebugPlugin, coord::CoordinateDebugPlugin, jetpack::JetPackDebugPlugin,
+        physics::PhysicsDebugPlugin,
+    },
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState},
     modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry},
-    physics::{Acceleration, Collider, Damping, PhysicsPlugin, Restitution, Rigidbody},
-    player::Player,
+    physics::{Collider, Drag, Mass, PhysicsPlugin, Restitution, Rigidbody, Velocity},
+    player::{FuelTank, JetPackPlugin, Jetpack, JetpackControl, Player},
     rand::RandPlugin,
-    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform},
+    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform, tile::Tile},
     world_gen::WorldGenPlugin,
 };
 
@@ -33,7 +37,7 @@ fn main() -> AppExit {
                         resolution: WindowResolution::new(1920, 1080),
                         #[cfg(not(debug_assertions))]
                         mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
-                        present_mode: PresentMode::AutoNoVsync,
+                        present_mode: PresentMode::AutoVsync,
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -46,9 +50,11 @@ fn main() -> AppExit {
             GraphicsPlugin,
             InputPlugin,
             DebugPlugin,
-            CoordinatePlugin,
+            CoordinateDebugPlugin,
             PhysicsDebugPlugin,
+            JetPackDebugPlugin,
             PhysicsPlugin,
+            JetPackPlugin,
         ))
         .insert_state(GameState::Boot)
         .add_systems(OnEnter(GameState::Boot), boot)
@@ -92,9 +98,19 @@ fn setup(mut commands: Commands) {
         WorldTransform::default(),
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
         Rigidbody,
+        Mass(1.0),
         Collider(Vec2::ONE * 1.0),
-        Damping(0.1),
+        Drag(0.002),
         Restitution(0.1),
+        Jetpack {
+            fuel_use_rate: 20.0,
+            force: 20.0,
+        },
+        FuelTank {
+            fuel: 100.0,
+            max_fuel: 100.0,
+            fuel_regen_rate: 100.0,
+        },
     ));
 }
 
@@ -123,30 +139,27 @@ fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<
 }
 
 fn player_move(
-    time: Res<Time>,
-    mut acceleration: Query<&mut Acceleration, With<Player>>,
+    mut acceleration: Query<&mut JetpackControl, With<Player>>,
     input: Res<InputState>,
     registry: Res<Registry<InputAction>>,
 ) {
-    let mut acceleration = acceleration.single_mut().unwrap();
+    let mut jetpack_control = acceleration.single_mut().unwrap();
 
-    let up = registry.lookup("base::up").unwrap();
-    let down = registry.lookup("base::down").unwrap();
     let left = registry.lookup("base::left").unwrap();
     let right = registry.lookup("base::right").unwrap();
     let fast = registry.lookup("base::fast").unwrap();
-    let jump = registry.lookup("base::jump").unwrap();
+    let up = registry.lookup("base::up").unwrap();
+    let down = registry.lookup("base::down").unwrap();
+    let hover = registry.lookup("base::hover").unwrap();
 
-    let axes = input.vec2(right, left, up, down);
-    let speed = match input.pressed(fast) {
-        false => 8.0,
-        true => 64.0,
-    };
-    if input.pressed(jump) {
-        acceleration.0 += Vec2::Y * 1024.0 * time.delta_secs();
+    let fast = input.pressed(fast) as i32 as f32 + 1.0;
+
+    jetpack_control.hover ^= input.just_pressed(hover);
+
+    jetpack_control.throttle = input.vec2(right, left, up, down) * fast * 0.25;
+    if !jetpack_control.hover {
+        jetpack_control.throttle.y += input.pressed(up) as i32 as f32 * 0.75;
     }
-
-    acceleration.0 += axes.normalize_or_zero() * speed * time.delta_secs() * 8.0;
 }
 
 fn zoom(

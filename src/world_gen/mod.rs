@@ -2,11 +2,11 @@ use bevy::prelude::*;
 
 use crate::{
     GameState,
-    modding::Id,
+    modding::{Id, Registry},
     world::{
         BaseChunk, World,
         chunk::{Chunk, TilePosition},
-        tile::Tile,
+        tile::{Tile, TileDef},
     },
 };
 
@@ -18,19 +18,20 @@ impl Plugin for WorldGenPlugin {
     }
 }
 
-pub fn dynamic_gen(world: ResMut<World>, base: Res<BaseChunk>) {
+pub fn dynamic_gen(world: ResMut<World>, base: Res<BaseChunk>, registry: Res<Registry<TileDef>>) {
     let world = world.into_inner();
+    let registry = registry.into_inner();
     for cy in -8..=8 {
         for cx in -8..=8 {
             let chunk_pos = base.0 + IVec2::new(cx, cy);
             if !world.contains_chunk(chunk_pos) {
-                test_gen_chunk(world, chunk_pos);
+                test_gen_chunk(world, chunk_pos, registry);
             }
         }
     }
 }
 
-pub fn test_gen_chunk(world: &mut World, pos: IVec2) {
+pub fn test_gen_chunk(world: &mut World, pos: IVec2, registry: &Registry<TileDef>) {
     let mut chunk = Chunk::empty();
     let chunk_factor = rand::random::<f32>() / 2.0 + 0.5;
     if pos.y < -1 {
@@ -38,10 +39,11 @@ pub fn test_gen_chunk(world: &mut World, pos: IVec2) {
             *tile = Tile { id: Id::ONE };
         }
     } else if pos.y == -1 {
+        let random = rand::random_range(1..registry.len());
+        let tile = Tile::new(Id::new(random as u32));
         for x in 0..=15 {
-            let height = rand::random_range(0..=15);
-            for y in 0..height as u8 {
-                chunk.insert(TilePosition::from_xy(x, y), Tile::new(Id::ONE));
+            for y in 0..=15 as u8 {
+                chunk.insert(TilePosition::from_xy(x, y), tile);
             }
         }
     } else {

@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::GameState;
 
 pub mod coord;
+pub mod jetpack;
 pub mod physics;
 
 pub struct DebugPlugin;
@@ -24,6 +25,7 @@ fn setup(mut commands: Commands) {
             position_type: PositionType::Absolute,
             top: Val::Px(5.0),
             right: Val::Px(5.0),
+            width: Val::Px(400.0),
             ..default()
         },
         DebugText,

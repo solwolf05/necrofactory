@@ -1,11 +1,18 @@
-use bevy::math::{I64Vec2, Vec2};
+use bevy::{
+    math::{I64Vec2, Vec2},
+    reflect::GetTupleField,
+};
 
-use crate::{math::HybridVec2, world::World};
+use crate::{
+    math::{Hybrid, HybridVec2},
+    modding::Id,
+    world::{World, tile::Tile},
+};
 
 #[derive(Debug)]
 pub struct Aabb {
-    center: HybridVec2,
-    half_extents: Vec2,
+    pub center: HybridVec2,
+    pub half_extents: Vec2,
 }
 
 impl Aabb {
@@ -78,15 +85,95 @@ impl Aabb {
     }
 
     pub fn overlap_world(&self, world: &World) -> bool {
-        let min = self.center - self.half_extents;
-        let max = self.center + self.half_extents - 0.0001;
+        let min = self.center - self.half_extents + 0.5;
+        let max = self.center + self.half_extents + 0.5 - 0.0001;
 
-        for x in min.x.round().into()..=max.x.round().into() {
-            for y in min.y.round().into()..=max.y.round().into() {
+        for x in min.x.floor().into()..=max.x.floor().into() {
+            for y in min.y.floor().into()..=max.y.floor().into() {
                 let pos = I64Vec2::new(x, y);
                 if world.contains_tile(pos) {
                     return true;
                 }
+            }
+        }
+
+        false
+    }
+
+    pub fn overlapping_tiles<'w>(&self, world: &'w World) -> OverlappingTiles<'w> {
+        let min = self.center - self.half_extents;
+        let max = self.center + self.half_extents - 0.0001;
+
+        let mut tiles = OverlappingTiles::default();
+
+        tiles.bottom_left = get_tile(world, min.x, min.y);
+        tiles.bottom_right = get_tile(world, max.x, min.y);
+        tiles.top_left = get_tile(world, min.x, max.y);
+        tiles.top_right = get_tile(world, max.x, max.y);
+
+        tiles
+    }
+
+    pub fn overlapping_tiles_bottom<'w>(
+        &self,
+        world: &'w World,
+    ) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        let min = self.center - self.half_extents;
+        let max = self.center + self.half_extents - 0.0001;
+
+        let bottom_left = get_tile(world, min.x, min.y);
+        let bottom_right = get_tile(world, max.x, min.y);
+
+        (bottom_left, bottom_right)
+    }
+
+    pub fn overlapping_tiles_top<'w>(
+        &self,
+        world: &'w World,
+    ) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        let min = self.center - self.half_extents;
+        let max = self.center + self.half_extents - 0.0001;
+
+        let top_left = get_tile(world, min.x, max.y);
+        let top_right = get_tile(world, max.x, max.y);
+
+        (top_left, top_right)
+    }
+
+    pub fn overlapping_tiles_left<'w>(
+        &self,
+        world: &'w World,
+    ) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        let min = self.center - self.half_extents;
+        let max = self.center + self.half_extents - 0.0001;
+
+        let bottom_left = get_tile(world, min.x, min.y);
+        let top_left = get_tile(world, min.x, max.y);
+
+        (bottom_left, top_left)
+    }
+
+    pub fn overlapping_tiles_right<'w>(
+        &self,
+        world: &'w World,
+    ) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        let min = self.center - self.half_extents;
+        let max = self.center + self.half_extents - 0.0001;
+
+        let bottom_right = get_tile(world, max.x, min.y);
+        let top_right = get_tile(world, max.x, max.y);
+
+        (bottom_right, top_right)
+    }
+
+    pub fn overlap_world_bottom(&self, world: &World) -> bool {
+        let min = self.center - self.half_extents;
+        let max = self.center + self.half_extents - 0.0001;
+
+        for x in min.x.round().into()..=max.x.round().into() {
+            let pos = I64Vec2::new(x, min.y.round().into());
+            if world.contains_tile(pos) {
+                return true;
             }
         }
 
@@ -170,10 +257,74 @@ pub struct SweepContact {
     pub time: f32,
 }
 
-pub fn rebound(delta: Vec2, time: f32, normal: Vec2, restitution: f32) -> Vec2 {
-    let first = delta * time;
-    let last = delta * (1.0 - time);
-    let last_reflected = last - last.dot(normal) * normal * 2.0 * restitution;
+pub fn get_tile(world: &World, x: Hybrid, y: Hybrid) -> Option<&Tile> {
+    let pos = I64Vec2::new(x.round().into(), y.round().into());
+    world.get_tile(pos).filter(|tile| tile.is_some())
+}
 
-    first + last_reflected
+#[derive(Debug, Default)]
+pub struct OverlappingTiles<'w> {
+    pub bottom_left: Option<&'w Tile>,
+    pub bottom_right: Option<&'w Tile>,
+    pub top_left: Option<&'w Tile>,
+    pub top_right: Option<&'w Tile>,
+}
+
+impl<'w> OverlappingTiles<'w> {
+    pub fn is_some(&self) -> bool {
+        self.top_left.is_some()
+            || self.top_right.is_some()
+            || self.bottom_left.is_some()
+            || self.bottom_right.is_some()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.top_left.is_none()
+            && self.top_right.is_none()
+            && self.bottom_left.is_none()
+            && self.bottom_right.is_none()
+    }
+
+    pub fn is_bottom_some(&self) -> bool {
+        self.bottom_left.is_some() || self.bottom_right.is_some()
+    }
+
+    pub fn is_left_some(&self) -> bool {
+        self.bottom_left.is_some() || self.top_left.is_some()
+    }
+
+    pub fn is_top_some(&self) -> bool {
+        self.top_left.is_some() || self.top_right.is_some()
+    }
+
+    pub fn is_right_some(&self) -> bool {
+        self.bottom_right.is_some() || self.bottom_right.is_some()
+    }
+
+    pub fn bottom(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        (self.bottom_left, self.bottom_right)
+    }
+
+    pub fn top(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        (self.top_left, self.top_right)
+    }
+
+    pub fn left(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        (self.bottom_left, self.top_left)
+    }
+
+    pub fn right(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        (self.bottom_right, self.top_right)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &'w Tile> {
+        [
+            self.bottom_left,
+            self.bottom_right,
+            self.top_left,
+            self.top_right,
+        ]
+        .into_iter()
+        .flatten()
+    }
 }

@@ -1,4 +1,5 @@
 (
     path: "some",
     sprite_path: "mods://base/assets/block.png",
+    friction: 0.1,
 )

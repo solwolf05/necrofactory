@@ -9,35 +9,48 @@ use crate::{
 };
 
 #[derive(Debug, Default, Resource)]
+pub struct PendingSprites(pub HashMap<Id<TileDef>, Handle<Image>>);
+
+#[derive(Debug, Default, Resource)]
 pub struct TileSprites {
     pub(self) missing: Handle<Image>,
-    pub pending: HashMap<Id<TileDef>, Handle<Image>>,
-    pub complete: HashMap<Id<TileDef>, Handle<Image>>,
+    complete: HashMap<Id<TileDef>, Handle<Image>>,
+}
+
+impl TileSprites {
+    pub fn get(&self, id: Id<TileDef>) -> Handle<Image> {
+        self.complete.get(&id).unwrap_or(&self.missing).clone()
+    }
 }
 
 pub fn begin_asset_loading(
+    mut commands: Commands,
     tiles: Res<Registry<TileDef>>,
-    mut handles: ResMut<TileSprites>,
+    mut sprites: ResMut<TileSprites>,
     asset_server: Res<AssetServer>,
 ) {
     let missing = asset_server.load("missing.png");
-    handles.missing = missing.clone();
+    sprites.missing = missing.clone();
+
+    let mut pending = PendingSprites::default();
     for (id, _, tile) in tiles.iter_with_id() {
         let handle = asset_server.load(&tile.sprite_path);
-        handles.pending.insert(id, handle);
+        pending.0.insert(id, handle);
     }
+    commands.insert_resource(pending);
 }
 
 pub fn check_assets_loaded(
     mut next_state: ResMut<NextState<ModLoadState>>,
-    mut handles: ResMut<TileSprites>,
+    mut sprites: ResMut<TileSprites>,
+    mut pending: ResMut<PendingSprites>,
     registry: Res<Registry<TileDef>>,
     asset_server: Res<AssetServer>,
 ) {
     let mut to_complete = Vec::new();
     let mut to_fail = Vec::new();
 
-    for (&id, handle) in handles.pending.iter() {
+    for (&id, handle) in pending.0.iter() {
         let load_state = asset_server.load_state(handle);
         match load_state {
             bevy::asset::LoadState::NotLoaded | bevy::asset::LoadState::Loading => continue,
@@ -51,15 +64,13 @@ pub fn check_assets_loaded(
     }
 
     for id in to_complete {
-        if let Some((id, handle)) = handles.pending.remove_entry(&id) {
-            handles.complete.insert(id, handle);
+        if let Some((id, handle)) = pending.0.remove_entry(&id) {
+            sprites.complete.insert(id, handle);
         }
     }
 
     for (id, asset_load_error) in to_fail {
-        handles.pending.remove_entry(&id);
-        let missing = handles.missing.clone();
-        handles.complete.insert(id, missing);
+        pending.0.remove_entry(&id);
         error!(
             "Failed to load asset for tile {}: {}",
             registry.resolve(id).unwrap(),
@@ -67,8 +78,12 @@ pub fn check_assets_loaded(
         );
     }
 
-    if handles.pending.is_empty() {
+    if pending.0.is_empty() {
         info!("Asset loading complete");
         next_state.set(ModLoadState::Finalize);
     }
+}
+
+pub fn cleanup(mut commands: Commands) {
+    commands.remove_resource::<PendingSprites>();
 }
