@@ -1,11 +1,7 @@
-use bevy::{
-    math::{I64Vec2, Vec2},
-    reflect::GetTupleField,
-};
+use bevy::math::{I64Vec2, Vec2};
 
 use crate::{
     math::{Hybrid, HybridVec2},
-    modding::Id,
     world::{World, tile::Tile},
 };
 
@@ -166,20 +162,6 @@ impl Aabb {
         (bottom_right, top_right)
     }
 
-    pub fn overlap_world_bottom(&self, world: &World) -> bool {
-        let min = self.center - self.half_extents;
-        let max = self.center + self.half_extents - 0.0001;
-
-        for x in min.x.round().into()..=max.x.round().into() {
-            let pos = I64Vec2::new(x, min.y.round().into());
-            if world.contains_tile(pos) {
-                return true;
-            }
-        }
-
-        false
-    }
-
     pub fn sweep_point(
         &self,
         origin: HybridVec2,
@@ -326,5 +308,61 @@ impl<'w> OverlappingTiles<'w> {
         ]
         .into_iter()
         .flatten()
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct IsTilesOverlap<'w> {
+    pub bottom_left: Option<&'w Tile>,
+    pub bottom_right: Option<&'w Tile>,
+    pub top_left: Option<&'w Tile>,
+    pub top_right: Option<&'w Tile>,
+}
+
+impl<'w> IsTilesOverlap<'w> {
+    pub fn is_some(&self) -> bool {
+        self.top_left.is_some()
+            || self.top_right.is_some()
+            || self.bottom_left.is_some()
+            || self.bottom_right.is_some()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.top_left.is_none()
+            && self.top_right.is_none()
+            && self.bottom_left.is_none()
+            && self.bottom_right.is_none()
+    }
+
+    pub fn is_bottom_some(&self) -> bool {
+        self.bottom_left.is_some() || self.bottom_right.is_some()
+    }
+
+    pub fn is_left_some(&self) -> bool {
+        self.bottom_left.is_some() || self.top_left.is_some()
+    }
+
+    pub fn is_top_some(&self) -> bool {
+        self.top_left.is_some() || self.top_right.is_some()
+    }
+
+    pub fn is_right_some(&self) -> bool {
+        self.bottom_right.is_some() || self.bottom_right.is_some()
+    }
+
+    pub fn bottom(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        (self.bottom_left, self.bottom_right)
+    }
+
+    pub fn top(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        (self.top_left, self.top_right)
+    }
+
+    pub fn left(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        (self.bottom_left, self.top_left)
+    }
+
+    pub fn right(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
+        (self.bottom_right, self.top_right)
     }
 }

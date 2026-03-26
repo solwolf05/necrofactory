@@ -2,7 +2,6 @@
 
 use bevy::{
     camera::ScalingMode,
-    math::{I64Vec2, VectorSpace},
     prelude::*,
     window::{PresentMode, WindowMode, WindowResolution},
 };
@@ -14,12 +13,12 @@ use necrofactory::{
         physics::PhysicsDebugPlugin,
     },
     graphics::GraphicsPlugin,
-    input::{InputAction, InputPlugin, InputState},
+    input::{InputAction, InputPlugin, InputState, WorldCursor},
     modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry},
-    physics::{Collider, Drag, Mass, PhysicsPlugin, Restitution, Rigidbody, Velocity},
+    physics::{Collider, Drag, Mass, PhysicsPlugin, Restitution, Rigidbody},
     player::{FuelTank, JetPackPlugin, Jetpack, JetpackControl, Player},
     rand::RandPlugin,
-    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform, tile::Tile},
+    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform},
     world_gen::WorldGenPlugin,
 };
 
@@ -99,7 +98,7 @@ fn setup(mut commands: Commands) {
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
         Rigidbody,
         Mass(1.0),
-        Collider(Vec2::ONE * 1.0),
+        Collider(Vec2::ONE),
         Drag(0.002),
         Restitution(0.1),
         Jetpack {
@@ -183,11 +182,13 @@ fn zoom(
 
 fn toggle_tile(
     mut world: ResMut<World>,
-    player: Query<&WorldTransform, With<Player>>,
     input: Res<InputState>,
+    cursor: Res<WorldCursor>,
     registry: Res<Registry<InputAction>>,
 ) {
-    let player_pos = player.single().unwrap().clone().translation.round();
+    let Some(player_pos) = cursor.0 else {
+        return;
+    };
     if input.just_pressed(registry.lookup("base::toggle").unwrap()) {
         let tile = world.get_tile_mut(IVec2::from(player_pos).into()).unwrap();
         if tile.id == Id::ZERO {

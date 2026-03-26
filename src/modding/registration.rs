@@ -22,7 +22,7 @@ use crate::{
     world::tile::TileDef,
 };
 
-const MAX_CONCURRENT_IO: usize = 1;
+const MAX_CONCURRENT_IO: usize = 10;
 
 #[derive(Debug, Default, Resource)]
 pub struct PendingDefs {
@@ -68,16 +68,13 @@ impl CompleteDefs {
     }
 }
 
-#[cfg(feature = "time")]
 #[derive(Debug, Resource)]
 pub struct ModRegistrationTime(Instant);
 
-#[cfg(feature = "time")]
 pub fn start_registration_time(mut commands: Commands) {
     commands.insert_resource(ModRegistrationTime(Instant::now()));
 }
 
-#[cfg(feature = "time")]
 pub fn log_registration_completion(time: Res<ModRegistrationTime>) {
     info!(
         "Mod registration complete ({}ms)",
@@ -206,8 +203,6 @@ pub fn check_registries_loaded(
     active: Res<ActiveDefs>,
 ) {
     if pending.is_empty() && active.is_empty() {
-        #[cfg(not(feature = "time"))]
-        info!("Mod registration complete");
         next_state.set(ModLoadState::LoadAssets);
     }
 }

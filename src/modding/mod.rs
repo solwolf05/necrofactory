@@ -79,7 +79,6 @@ impl Plugin for ModPlugin {
             .add_systems(OnEnter(ModLoadState::Finalize), finalize)
             .add_systems(OnEnter(ModLoadState::Finalize), check_registries);
 
-        #[cfg(feature = "time")]
         app.add_systems(OnEnter(ModLoadState::Register), start_registration_time)
             .add_systems(OnExit(ModLoadState::Register), log_registration_completion);
     }

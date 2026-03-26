@@ -13,7 +13,7 @@ pub fn validate_mods(
     mut mods: ResMut<ModRegistry>,
 ) {
     #[cfg(feature = "no_disable")]
-    info!("NODISABLE is true");
+    info!("no_disable is true");
 
     let instant = Instant::now();
 
@@ -47,11 +47,7 @@ pub fn validate_mods(
 
             let elapsed = instant.elapsed();
 
-            #[cfg(feature = "time")]
             info!("Mod validation complete ({}ms)", elapsed.as_millis_f32());
-
-            #[cfg(not(feature = "time"))]
-            info!("Mod validation complete");
 
             next_state.set(ModLoadState::Register);
         }

@@ -7,7 +7,11 @@ use bevy::{
 
 use serde::Deserialize;
 
-use crate::modding::{Id, ModLoadState, Registry};
+use crate::{
+    math::HybridVec2,
+    modding::{Id, ModLoadState, Registry},
+    world::{BaseChunk, TILE_SIZE},
+};
 
 pub struct InputPlugin;
 
@@ -16,6 +20,7 @@ impl Plugin for InputPlugin {
         app.init_resource::<InputState>()
             .init_resource::<InputBindings>()
             .init_resource::<Registry<InputAction>>()
+            .init_resource::<WorldCursor>()
             .add_systems(OnEnter(ModLoadState::Finalize), setup_input_map)
             .add_systems(
                 PreUpdate,
@@ -23,6 +28,7 @@ impl Plugin for InputPlugin {
                     button_input_system,
                     scroll_input_system,
                     cursor_input_system,
+                    world_cursor_input_system,
                 )
                     .after(InputSystems),
             );
@@ -81,9 +87,38 @@ fn scroll_input_system(mut state: ResMut<InputState>, mut scroll: MessageReader<
     state.scroll = scroll.read().fold(0.0, |sum, event| sum + event.y);
 }
 
-fn cursor_input_system(mut state: ResMut<InputState>, window: Query<&Window>) {
-    state.cursor = window.single().ok().and_then(|w| w.cursor_position());
+fn cursor_input_system(mut state: ResMut<InputState>, windows: Query<&Window>) {
+    state.cursor = windows.single().ok().and_then(|w| w.cursor_position());
 }
+
+fn world_cursor_input_system(
+    mut world_cursor: ResMut<WorldCursor>,
+    windows: Query<&Window>,
+    camera: Query<(&Camera, &GlobalTransform)>,
+    base: Res<BaseChunk>,
+) {
+    fn f(
+        windows: Query<&Window>,
+        camera: Query<(&Camera, &GlobalTransform)>,
+        base: Res<BaseChunk>,
+    ) -> Option<HybridVec2> {
+        let window = windows.single().ok()?;
+        let (camera, camera_transform) = camera.single().ok()?;
+
+        let cursor_pos = window.cursor_position()?;
+        let world_pos = camera
+            .viewport_to_world_2d(camera_transform, cursor_pos)
+            .ok()?;
+        let tile_pos = world_pos / TILE_SIZE as f32;
+        let chunk_pos = base.0;
+        Some(HybridVec2::from_chunk_tile(chunk_pos, tile_pos).round())
+    }
+
+    world_cursor.0 = f(windows, camera, base);
+}
+
+#[derive(Debug, Default, Resource)]
+pub struct WorldCursor(pub Option<HybridVec2>);
 
 #[derive(Debug, Default, Resource)]
 pub struct InputState {

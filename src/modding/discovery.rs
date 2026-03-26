@@ -46,11 +46,7 @@ pub fn discover_mods(
 
     let elapsed = instant.elapsed();
 
-    #[cfg(feature = "time")]
     info!("Mod discovery complete ({}ms)", elapsed.as_millis_f32());
-
-    #[cfg(not(feature = "time"))]
-    info!("Mod discovery complete");
 
     next_state.set(ModLoadState::Validate);
 }
