@@ -241,7 +241,7 @@ pub struct SweepContact {
 
 pub fn get_tile(world: &World, x: Hybrid, y: Hybrid) -> Option<&Tile> {
     let pos = I64Vec2::new(x.round().into(), y.round().into());
-    world.get_tile(pos).filter(|tile| tile.is_some())
+    world.get_tile(pos)
 }
 
 #[derive(Debug, Default)]

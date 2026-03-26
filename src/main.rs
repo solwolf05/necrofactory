@@ -10,7 +10,7 @@ use necrofactory::{
     GameState,
     debug::{
         DebugPlugin, coord::CoordinateDebugPlugin, jetpack::JetPackDebugPlugin,
-        physics::PhysicsDebugPlugin,
+        physics::PhysicsDebugPlugin, probe::ProbePlugin,
     },
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState, WorldCursor},
@@ -18,7 +18,7 @@ use necrofactory::{
     physics::{Collider, Drag, Mass, PhysicsPlugin, Restitution, Rigidbody},
     player::{FuelTank, JetPackPlugin, Jetpack, JetpackControl, Player},
     rand::RandPlugin,
-    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform},
+    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform, tile::Tile},
     world_gen::WorldGenPlugin,
 };
 
@@ -48,12 +48,13 @@ fn main() -> AppExit {
             WorldGenPlugin,
             GraphicsPlugin,
             InputPlugin,
+            PhysicsPlugin,
+            JetPackPlugin,
             DebugPlugin,
             CoordinateDebugPlugin,
             PhysicsDebugPlugin,
             JetPackDebugPlugin,
-            PhysicsPlugin,
-            JetPackPlugin,
+            ProbePlugin,
         ))
         .insert_state(GameState::Boot)
         .add_systems(OnEnter(GameState::Boot), boot)
@@ -190,11 +191,11 @@ fn toggle_tile(
         return;
     };
     if input.just_pressed(registry.lookup("base::toggle").unwrap()) {
-        let tile = world.get_tile_mut(IVec2::from(player_pos).into()).unwrap();
-        if tile.id == Id::ZERO {
-            tile.id = Id::ONE;
+        let pos = IVec2::from(player_pos).into();
+        if world.contains_tile(pos) {
+            world.remove_tile(pos);
         } else {
-            tile.id = Id::ZERO;
+            world.insert_tile(pos, Tile::new(Id::new(1)));
         }
     }
 }

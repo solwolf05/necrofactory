@@ -104,26 +104,6 @@ pub fn discover_definitions(mods: Res<ModRegistry>, mut pending: ResMut<PendingD
     }
 }
 
-pub fn register_defaults(
-    mut tiles: ResMut<Registry<TileDef>>,
-    mut inputs: ResMut<Registry<InputAction>>,
-) {
-    tiles.register(
-        "base::none",
-        TileDef {
-            sprite_path: "missing.png".into(),
-            friction: 0.0,
-        },
-    );
-    inputs.register(
-        "base::none",
-        InputAction {
-            name: "None".to_owned(),
-            default: InputBinding::default(),
-        },
-    );
-}
-
 fn read_mod_dir(id: Id<ModInfo>, mod_info: &ModInfo, path: &str) -> Vec<(Id<ModInfo>, PathBuf)> {
     read_dir(&mod_info.path.join(path))
         .map(|path| (id, path))

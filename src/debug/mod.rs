@@ -5,6 +5,7 @@ use crate::GameState;
 pub mod coord;
 pub mod jetpack;
 pub mod physics;
+pub mod probe;
 
 pub struct DebugPlugin;
 

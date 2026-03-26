@@ -3,7 +3,7 @@ use bevy::{platform::collections::HashSet, prelude::*};
 use crate::{
     GameState,
     math::HybridVec2,
-    modding::{Id, TileSprites},
+    modding::TileSprites,
     world::{BaseChunk, RebaseSet, World, WorldTransform, chunk::TilePosition},
 };
 
@@ -37,18 +37,18 @@ fn update_sprites(
         }
 
         for child in children.iter() {
-            if let Ok((render_tile, mut sprite, mut visibility)) = tiles.get_mut(child) {
-                let pos = render_tile.0;
-                let tile = chunk.get(pos);
-                let id = tile.id;
+            let Ok((render_tile, mut sprite, mut visibility)) = tiles.get_mut(child) else {
+                continue;
+            };
+            let pos = render_tile.0;
+            let Some(tile) = chunk.get(pos) else {
+                *visibility = Visibility::Hidden;
+                continue;
+            };
+            let id = tile.id;
 
-                if id == Id::ZERO {
-                    *visibility = Visibility::Hidden;
-                } else {
-                    *visibility = Visibility::Visible;
-                    sprite.image = sprites.get(id);
-                }
-            }
+            *visibility = Visibility::Visible;
+            sprite.image = sprites.get(id);
         }
 
         chunk.dirty = false;

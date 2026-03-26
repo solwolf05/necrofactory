@@ -49,40 +49,24 @@ impl World {
         }
     }
 
-    pub fn get_chunk(&self, pos: IVec2) -> Option<&Chunk> {
-        self.chunks.get(&pos)
+    pub fn insert_chunk(&mut self, pos: IVec2, chunk: Chunk) {
+        self.chunks.insert(pos, chunk);
     }
 
-    pub fn get_chunk_mut(&mut self, pos: IVec2) -> Option<&mut Chunk> {
-        self.chunks.get_mut(&pos)
+    pub fn remove_chunk(&mut self, pos: IVec2) {
+        self.chunks.remove(&pos);
     }
 
     pub fn contains_chunk(&self, pos: IVec2) -> bool {
         self.chunks.contains_key(&pos)
     }
 
-    pub fn insert_chunk(&mut self, pos: IVec2, chunk: Chunk) {
-        self.chunks.insert(pos, chunk);
+    pub fn get_chunk(&self, pos: IVec2) -> Option<&Chunk> {
+        self.chunks.get(&pos)
     }
 
-    pub fn get_tile(&self, pos: I64Vec2) -> Option<&Tile> {
-        let chunk_pos = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
-        let tile_pos = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
-        self.chunks
-            .get(&chunk_pos.as_ivec2())
-            .map(|chunk| chunk.get(TilePosition::from_xy(tile_pos.x as u8, tile_pos.y as u8)))
-    }
-
-    pub fn get_tile_mut(&mut self, pos: I64Vec2) -> Option<&mut Tile> {
-        let chunk_pos = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
-        let tile_pos = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
-        self.chunks
-            .get_mut(&chunk_pos.as_ivec2())
-            .map(|chunk| chunk.get_mut(TilePosition::from_xy(tile_pos.x as u8, tile_pos.y as u8)))
-    }
-
-    pub fn contains_tile(&self, pos: I64Vec2) -> bool {
-        self.get_tile(pos).filter(|tile| tile.is_some()).is_some()
+    pub fn get_chunk_mut(&mut self, pos: IVec2) -> Option<&mut Chunk> {
+        self.chunks.get_mut(&pos)
     }
 
     pub fn insert_tile(&mut self, pos: I64Vec2, tile: Tile) {
@@ -101,5 +85,35 @@ impl World {
             );
             self.chunks.insert(chunk_pos, chunk);
         }
+    }
+
+    pub fn remove_tile(&mut self, pos: I64Vec2) {
+        let chunk_pos = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64)).as_ivec2();
+        let tile_pos = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        if let Some(chunk) = self.chunks.get_mut(&chunk_pos) {
+            chunk.remove(TilePosition::from_xy(tile_pos.x as u8, tile_pos.y as u8));
+        }
+    }
+
+    pub fn contains_tile(&self, pos: I64Vec2) -> bool {
+        self.get_tile(pos).is_some()
+    }
+
+    pub fn get_tile(&self, pos: I64Vec2) -> Option<&Tile> {
+        let chunk_pos = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        let tile_pos = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        self.chunks
+            .get(&chunk_pos.as_ivec2())
+            .and_then(|chunk| chunk.get(TilePosition::from_xy(tile_pos.x as u8, tile_pos.y as u8)))
+    }
+
+    pub fn get_tile_mut(&mut self, pos: I64Vec2) -> Option<&mut Tile> {
+        let chunk_pos = pos.div_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        let tile_pos = pos.rem_euclid(I64Vec2::splat(CHUNK_SIZE as i64));
+        self.chunks
+            .get_mut(&chunk_pos.as_ivec2())
+            .and_then(|chunk| {
+                chunk.get_mut(TilePosition::from_xy(tile_pos.x as u8, tile_pos.y as u8))
+            })
     }
 }

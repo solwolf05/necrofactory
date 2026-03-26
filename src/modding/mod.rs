@@ -9,9 +9,7 @@ use bevy::{
 
 use serde::Deserialize;
 
-use crate::modding::registration::{
-    log_registration_completion, register_defaults, start_registration_time,
-};
+use crate::modding::registration::{log_registration_completion, start_registration_time};
 use crate::{
     GameState,
     input::InputAction,
@@ -58,7 +56,7 @@ impl Plugin for ModPlugin {
             .add_systems(OnExit(ModLoadState::Validate), check_mod_load_order)
             .add_systems(
                 OnEnter(ModLoadState::Register),
-                (discover_definitions, register_defaults),
+                (discover_definitions, start_registration_time),
             )
             .add_systems(
                 Update,
@@ -70,6 +68,7 @@ impl Plugin for ModPlugin {
                 )
                     .run_if(in_state(ModLoadState::Register)),
             )
+            .add_systems(OnExit(ModLoadState::Register), log_registration_completion)
             .add_systems(OnEnter(ModLoadState::LoadAssets), begin_asset_loading)
             .add_systems(
                 Update,
@@ -78,9 +77,6 @@ impl Plugin for ModPlugin {
             .add_systems(OnExit(ModLoadState::LoadAssets), asset_loading::cleanup)
             .add_systems(OnEnter(ModLoadState::Finalize), finalize)
             .add_systems(OnEnter(ModLoadState::Finalize), check_registries);
-
-        app.add_systems(OnEnter(ModLoadState::Register), start_registration_time)
-            .add_systems(OnExit(ModLoadState::Register), log_registration_completion);
     }
 }
 
@@ -149,11 +145,11 @@ pub struct ModRegistry {
 impl ModRegistry {
     pub fn register(&mut self, segment: PathSegment, mod_info: ModInfo) -> Id<ModInfo> {
         if let Some(id) = self.lookup.get(&segment).copied() {
-            self.mods[id.get() as usize].1 = mod_info;
+            self.mods[id.index()].1 = mod_info;
             return id;
         }
 
-        let id = Id::new(self.mods.len() as u32);
+        let id = Id::from_index(self.mods.len());
         self.mods.push((segment.clone(), mod_info));
         self.lookup.insert(segment, id);
 
@@ -201,15 +197,15 @@ impl ModRegistry {
     }
 
     pub fn resolve(&self, id: Id<ModInfo>) -> Option<&PathSegment> {
-        self.mods.get(id.get() as usize).map(|r| &r.0)
+        self.mods.get(id.index()).map(|r| &r.0)
     }
 
     pub fn get(&self, id: Id<ModInfo>) -> Option<&ModInfo> {
-        self.mods.get(id.get() as usize).map(|r| &r.1)
+        self.mods.get(id.index()).map(|r| &r.1)
     }
 
     fn get_mut(&mut self, id: Id<ModInfo>) -> Option<&mut ModInfo> {
-        self.mods.get_mut(id.get() as usize).map(|r| &mut r.1)
+        self.mods.get_mut(id.index()).map(|r| &mut r.1)
     }
 
     pub fn get_by_segment(&self, segment: &PathSegment) -> Option<&ModInfo> {
@@ -221,7 +217,7 @@ impl ModRegistry {
     }
 
     pub fn contains(&self, id: Id<ModInfo>) -> bool {
-        self.mods.len() > id.get() as usize
+        self.mods.len() > id.index()
     }
 
     pub fn contains_path(&self, segment: &PathSegment) -> bool {
@@ -250,7 +246,7 @@ impl ModRegistry {
         self.mods
             .iter()
             .enumerate()
-            .map(|(i, (s, t))| (Id::new(i as u32), s, t))
+            .map(|(i, (s, t))| (Id::from_index(i), s, t))
     }
 
     pub fn iter_enabled_with_id(
@@ -260,7 +256,7 @@ impl ModRegistry {
             .iter()
             .filter(|(_, t)| t.enabled())
             .enumerate()
-            .map(|(i, (s, t))| (Id::new(i as u32), s, t))
+            .map(|(i, (s, t))| (Id::from_index(i), s, t))
     }
 
     pub fn iter_disabled_with_id(
@@ -270,7 +266,7 @@ impl ModRegistry {
             .iter()
             .filter(|(_, t)| !t.enabled())
             .enumerate()
-            .map(|(i, (s, t))| (Id::new(i as u32), s, t))
+            .map(|(i, (s, t))| (Id::from_index(i), s, t))
     }
 }
 

@@ -36,11 +36,11 @@ pub fn test_gen_chunk(world: &mut World, pos: IVec2, registry: &Registry<TileDef
     let chunk_factor = rand::random::<f32>() / 2.0 + 0.5;
     if pos.y < -1 {
         for tile in chunk.iter_mut() {
-            *tile = Tile { id: Id::ONE };
+            *tile = Tile { id: Id::new(1) };
         }
     } else if pos.y == -1 {
-        let random = rand::random_range(1..registry.len());
-        let tile = Tile::new(Id::new(random as u32));
+        let random = rand::random_range(0..registry.len());
+        let tile = Tile::new(Id::from_index(random));
         for x in 0..=15 {
             for y in 0..=15 as u8 {
                 chunk.insert(TilePosition::from_xy(x, y), tile);
@@ -51,7 +51,7 @@ pub fn test_gen_chunk(world: &mut World, pos: IVec2, registry: &Registry<TileDef
             let radius = 10.0;
             let factor = pos.y as f32 / radius / radius * chunk_factor;
             if rand::random::<f32>() < factor {
-                *tile = Tile { id: Id::ONE };
+                *tile = Tile { id: Id::new(1) };
             }
         }
     }

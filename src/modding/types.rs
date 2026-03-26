@@ -5,6 +5,7 @@ use std::{
     fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
+    num::NonZeroU32,
     str::FromStr,
 };
 
@@ -30,11 +31,11 @@ impl<T> Registry<T> {
     pub fn register(&mut self, path: impl TryInto<Path>, def: T) -> Option<Id<T>> {
         let path = path.try_into().ok()?;
         if let Some(id) = self.lookup.get(&path).copied() {
-            self.definitions[id.0 as usize].1 = def;
+            self.definitions[id.index()].1 = def;
             return Some(id);
         }
 
-        let id = Id::new(self.definitions.len() as u32);
+        let id = Id::from_index(self.definitions.len());
         self.definitions.push((path.clone(), def));
         self.lookup.insert(path, id);
 
@@ -57,12 +58,12 @@ impl<T> Registry<T> {
 
     /// Resolves the path of the definition associated with the given ID.
     pub fn resolve(&self, id: Id<T>) -> Option<&Path> {
-        self.definitions.get(id.0 as usize).map(|r| &r.0)
+        self.definitions.get(id.index()).map(|r| &r.0)
     }
 
     /// Retrieves the definition associated with the given ID.
     pub fn get(&self, id: Id<T>) -> Option<&T> {
-        self.definitions.get(id.0 as usize).map(|r| &r.1)
+        self.definitions.get(id.index()).map(|r| &r.1)
     }
 
     /// Retrieves the definition associated with the given path.
@@ -71,7 +72,7 @@ impl<T> Registry<T> {
     }
 
     pub fn contains(&self, id: Id<T>) -> bool {
-        self.definitions.len() > id.0 as usize
+        self.definitions.len() > id.index()
     }
 
     pub fn contains_path(&self, path: impl TryInto<Path>) -> bool {
@@ -90,7 +91,7 @@ impl<T> Registry<T> {
         self.definitions
             .iter()
             .enumerate()
-            .map(|(i, (p, t))| (Id::new(i as u32), p, t))
+            .map(|(i, (p, t))| (Id::from_index(i), p, t))
     }
 }
 
@@ -122,18 +123,23 @@ impl<T> Default for Registry<T> {
 }
 
 /// A id to a definition in a registry.
-pub struct Id<T>(u32, PhantomData<T>);
+pub struct Id<T>(NonZeroU32, PhantomData<T>);
 
 impl<T> Id<T> {
-    pub const ZERO: Self = Self(0, PhantomData);
-    pub const ONE: Self = Self(1, PhantomData);
-
-    pub(crate) const fn new(id: u32) -> Self {
-        Self(id, PhantomData)
+    pub const fn new(id: u32) -> Self {
+        Self(NonZeroU32::new(id).unwrap(), PhantomData)
     }
 
-    pub fn get(&self) -> u32 {
-        self.0
+    pub const fn from_index(id: usize) -> Self {
+        Self(NonZeroU32::new(id as u32 + 1).unwrap(), PhantomData)
+    }
+
+    pub const fn get(&self) -> u32 {
+        self.0.get()
+    }
+
+    pub const fn index(&self) -> usize {
+        self.0.get() as usize - 1
     }
 }
 

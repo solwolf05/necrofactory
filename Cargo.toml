@@ -22,8 +22,7 @@ semver = "1.0.27"
 noiz = "0.4.0"
 
 [features]
-default = ["time", "no_disable"]
-time = []
+default = ["no_disable"]
 no_disable = []
 
 # Idiomatic Bevy code often triggers these lints, and the CI workflow treats them as errors.

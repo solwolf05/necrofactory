@@ -1,6 +1,6 @@
 use crate::{
     debug::DebugText,
-    player::{FuelTank, Jetpack, JetpackControl, Player},
+    player::{FuelTank, JetpackControl, Player},
 };
 use bevy::prelude::*;
 

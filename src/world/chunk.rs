@@ -2,49 +2,52 @@ use std::{fmt::Display, hash::Hash};
 
 use bevy::prelude::*;
 
-use crate::{modding::Id, world::tile::Tile};
+use crate::world::tile::Tile;
 
 #[derive(Debug)]
 pub struct Chunk {
-    tiles: Vec<Tile>,
+    tiles: Vec<Option<Tile>>,
     pub dirty: bool,
 }
 
 impl Chunk {
     pub fn empty() -> Self {
         Self {
-            tiles: vec![Tile::new(Id::ZERO); 256],
+            tiles: vec![None; 256],
             dirty: false,
         }
     }
 
     pub fn insert(&mut self, position: TilePosition, tile: Tile) {
         self.dirty = true;
-        self.tiles[position.0 as usize] = tile;
+        self.tiles[position.0 as usize] = Some(tile);
     }
 
-    /// Replace the tile with the default tile.
     pub fn remove(&mut self, position: TilePosition) {
         self.dirty = true;
-        self.tiles[position.0 as usize] = Tile::default();
+        self.tiles[position.0 as usize] = None;
     }
 
-    pub fn get(&self, position: TilePosition) -> &Tile {
-        &self.tiles[position.0 as usize]
+    pub fn contains(&self, position: TilePosition) -> bool {
+        self.tiles[position.0 as usize].is_some()
     }
 
-    pub fn get_mut(&mut self, position: TilePosition) -> &mut Tile {
+    pub fn get(&self, position: TilePosition) -> Option<&Tile> {
+        self.tiles[position.0 as usize].as_ref()
+    }
+
+    pub fn get_mut(&mut self, position: TilePosition) -> Option<&mut Tile> {
         self.dirty = true;
-        &mut self.tiles[position.0 as usize]
+        self.tiles[position.0 as usize].as_mut()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Tile> {
-        self.tiles.iter()
+        self.tiles.iter().flatten()
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Tile> {
         self.dirty = true;
-        self.tiles.iter_mut()
+        self.tiles.iter_mut().flatten()
     }
 }
 
