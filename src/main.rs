@@ -36,7 +36,7 @@ fn main() -> AppExit {
                         resolution: WindowResolution::new(1920, 1080),
                         #[cfg(not(debug_assertions))]
                         mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
-                        present_mode: PresentMode::AutoVsync,
+                        present_mode: PresentMode::AutoNoVsync,
                         ..Default::default()
                     }),
                     ..Default::default()

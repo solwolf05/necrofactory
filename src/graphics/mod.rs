@@ -1,4 +1,6 @@
-use bevy::{platform::collections::HashSet, prelude::*};
+use std::collections::HashSet;
+
+use bevy::prelude::*;
 
 use crate::{
     GameState,
@@ -42,13 +44,20 @@ fn update_sprites(
             };
             let pos = render_tile.0;
             let Some(tile) = chunk.get(pos) else {
-                *visibility = Visibility::Hidden;
+                if *visibility != Visibility::Hidden {
+                    *visibility = Visibility::Hidden;
+                }
                 continue;
             };
             let id = tile.id;
 
-            *visibility = Visibility::Visible;
-            sprite.image = sprites.get(id);
+            if *visibility != Visibility::Visible {
+                *visibility = Visibility::Visible;
+            }
+            let image = sprites.get(id);
+            if sprite.image != image {
+                sprite.image = image;
+            }
         }
 
         chunk.dirty = false;
@@ -64,7 +73,11 @@ fn spawn_chunks(
 ) {
     const CHUNK_RADIUS: i32 = 1;
 
-    // Calculate which chunks should be loaded (3x3 area)
+    if !base.is_changed() {
+        return;
+    }
+
+    // Calculate which chunks should be loaded
     let mut chunks_to_load = Vec::new();
     for cy in -CHUNK_RADIUS..=CHUNK_RADIUS {
         for cx in -CHUNK_RADIUS..=CHUNK_RADIUS {
@@ -91,7 +104,7 @@ fn spawn_chunks(
             continue;
         };
 
-        let mut render_chunk = commands.spawn((RenderChunk(chunk_pos, true), Transform::default()));
+        let mut render_chunk = commands.spawn((RenderChunk(chunk_pos, true)));
 
         render_chunk.with_children(|spawner| {
             for tile_pos in 0..=255 {
@@ -120,4 +133,5 @@ pub struct RenderTile(pub TilePosition);
 
 #[derive(Debug, Component)]
 #[require(InheritedVisibility)]
+#[require(Transform)]
 pub struct RenderChunk(pub IVec2, pub bool);

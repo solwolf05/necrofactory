@@ -14,7 +14,7 @@ impl Chunk {
     pub fn empty() -> Self {
         Self {
             tiles: vec![None; 256],
-            dirty: false,
+            dirty: true,
         }
     }
 

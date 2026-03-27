@@ -41,7 +41,7 @@ fn update_text(
         .and_then(|tile| registry.resolve(tile.id));
 
     text.0 = match path {
-        Some(path) => format!("Tile: {}\n", path),
-        None => "Tile: none\n".to_owned(),
+        Some(path) => format!("{}\n", path),
+        None => "none\n".to_owned(),
     };
 }
