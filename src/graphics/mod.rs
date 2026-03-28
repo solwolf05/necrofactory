@@ -34,7 +34,7 @@ fn update_sprites(
             continue;
         };
 
-        if !chunk.dirty && !render_chunk.1 {
+        if !chunk.dirty && !render_chunk.0 {
             continue;
         }
 
@@ -61,7 +61,7 @@ fn update_sprites(
         }
 
         chunk.dirty = false;
-        render_chunk.1 = false;
+        render_chunk.0 = false;
     }
 }
 
@@ -91,11 +91,10 @@ fn spawn_chunks(
 
     let mut pool = Vec::new();
     for (render_chunk, transform) in render_chunks {
-        chunks_in_range.insert(render_chunk.0);
+        chunks_in_range.insert(transform.translation.chunk());
 
         // If this chunk is no longer in range, despawn it
-        if !chunks_to_load.contains(&render_chunk.0) {
-            // *visibility = Visibility::Hidden;
+        if !chunks_to_load.contains(&transform.translation.chunk()) {
             pool.push((render_chunk, transform));
         }
     }
@@ -107,17 +106,13 @@ fn spawn_chunks(
         };
 
         if let Some((mut render_chunk, mut transform)) = pool.pop() {
-            render_chunk.0 = chunk_pos;
-            render_chunk.1 = true;
+            render_chunk.0 = true;
             transform.translation = HybridVec2::from_chunk(chunk_pos);
-            // *visibility = Visibility::Visible;
             continue;
         }
 
-        let mut render_chunk = commands.spawn((
-            RenderChunk(chunk_pos, true),
-            WorldTransform::from_chunk(chunk_pos),
-        ));
+        let mut render_chunk =
+            commands.spawn((RenderChunk(true), WorldTransform::from_chunk(chunk_pos)));
 
         render_chunk.with_children(|spawner| {
             for tile_pos in 0..=255 {
@@ -143,7 +138,7 @@ fn cleanup(mut commands: Commands, query: Query<Entity, With<RenderChunk>>) {
 #[derive(Debug, Component)]
 #[require(Visibility)]
 #[require(Transform)]
-pub struct RenderChunk(pub IVec2, pub bool);
+pub struct RenderChunk(pub bool);
 
 #[derive(Debug, Component)]
 pub struct RenderTile(pub TilePosition);
