@@ -20,6 +20,7 @@ tracing = { version = "0.1", features = [
 rand = "0.9.2"
 semver = "1.0.27"
 noiz = "0.4.0"
+bevy-inspector-egui = "0.36.0"
 
 [features]
 default = ["no_disable"]

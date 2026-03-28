@@ -14,7 +14,7 @@ pub struct BaseChunk(pub IVec2);
 
 /// Used for rendering and other operations that require floating-point coordinates.
 /// Separates the world into chunks and tiles to avoid floating point precision issues far from origin.
-#[derive(Debug, Default, Clone, Copy, Component)]
+#[derive(Debug, Default, Clone, Copy, Component, Reflect)]
 #[require(Transform)]
 pub struct WorldTransform {
     pub translation: HybridVec2,

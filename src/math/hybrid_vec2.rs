@@ -3,11 +3,14 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
-use bevy::math::{I64Vec2, IVec2, Vec2};
+use bevy::{
+    math::{I64Vec2, IVec2, Vec2},
+    reflect::Reflect,
+};
 
 use crate::math::hybrid::Hybrid;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Reflect)]
 pub struct HybridVec2 {
     pub x: Hybrid,
     pub y: Hybrid,
@@ -39,15 +42,15 @@ impl HybridVec2 {
 
     pub fn from_chunk(chunk: IVec2) -> Self {
         Self {
-            x: chunk.x.into(),
-            y: chunk.y.into(),
+            x: Hybrid::from_chunk(chunk.x),
+            y: Hybrid::from_chunk(chunk.y),
         }
     }
 
     pub fn from_tile(tile: Vec2) -> Self {
         Self {
-            x: tile.x.into(),
-            y: tile.y.into(),
+            x: Hybrid::from_tile(tile.x),
+            y: Hybrid::from_tile(tile.y),
         }
     }
 

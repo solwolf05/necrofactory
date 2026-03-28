@@ -3,9 +3,11 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
+use bevy::reflect::Reflect;
+
 use crate::world::{CHUNK_SIZE, TILE_SIZE};
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd, Reflect)]
 pub struct Hybrid {
     pub chunk: i32,
     pub tile: f32,

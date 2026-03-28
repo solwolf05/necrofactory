@@ -6,7 +6,7 @@ use crate::{
     GameState,
     math::HybridVec2,
     modding::TileSprites,
-    world::{BaseChunk, RebaseSet, World, WorldTransform, chunk::TilePosition},
+    world::{BaseChunk, RebaseSet, TILE_SIZE, World, WorldTransform, chunk::TilePosition},
 };
 
 pub struct GraphicsPlugin;
@@ -24,13 +24,13 @@ impl Plugin for GraphicsPlugin {
 }
 
 fn update_sprites(
-    mut chunks: Query<(&mut RenderChunk, &mut Children)>,
+    mut chunks: Query<(&mut RenderChunk, &WorldTransform, &mut Children)>,
     mut tiles: Query<(&RenderTile, &mut Sprite, &mut Visibility)>,
     mut world: ResMut<World>,
     sprites: Res<TileSprites>,
 ) {
-    for (mut render_chunk, children) in chunks.iter_mut() {
-        let Some(chunk) = world.get_chunk_mut(render_chunk.0) else {
+    for (mut render_chunk, transform, children) in chunks.iter_mut() {
+        let Some(chunk) = world.get_chunk_mut(transform.translation.chunk()) else {
             continue;
         };
 
@@ -51,8 +51,8 @@ fn update_sprites(
             };
             let id = tile.id;
 
-            if *visibility != Visibility::Visible {
-                *visibility = Visibility::Visible;
+            if *visibility != Visibility::Inherited {
+                *visibility = Visibility::Inherited;
             }
             let image = sprites.get(id);
             if sprite.image != image {
@@ -68,7 +68,7 @@ fn update_sprites(
 fn spawn_chunks(
     mut commands: Commands,
     base: Res<BaseChunk>,
-    render_chunks: Query<(Entity, &RenderChunk)>,
+    render_chunks: Query<(&mut RenderChunk, &mut WorldTransform)>,
     world: Res<World>,
 ) {
     const CHUNK_RADIUS: i32 = 1;
@@ -78,23 +78,25 @@ fn spawn_chunks(
     }
 
     // Calculate which chunks should be loaded
-    let mut chunks_to_load = Vec::new();
+    let mut chunks_to_load = HashSet::new();
     for cy in -CHUNK_RADIUS..=CHUNK_RADIUS {
         for cx in -CHUNK_RADIUS..=CHUNK_RADIUS {
             let chunk_pos = base.0 + IVec2::new(cx, cy);
-            chunks_to_load.push(chunk_pos);
+            chunks_to_load.insert(chunk_pos);
         }
     }
 
     // Determine which chunks to spawn vs unload
     let mut chunks_in_range = HashSet::new();
 
-    for (entity, render_chunk) in render_chunks {
+    let mut pool = Vec::new();
+    for (render_chunk, transform) in render_chunks {
         chunks_in_range.insert(render_chunk.0);
 
         // If this chunk is no longer in range, despawn it
         if !chunks_to_load.contains(&render_chunk.0) {
-            commands.entity(entity).despawn();
+            // *visibility = Visibility::Hidden;
+            pool.push((render_chunk, transform));
         }
     }
 
@@ -104,18 +106,28 @@ fn spawn_chunks(
             continue;
         };
 
-        let mut render_chunk = commands.spawn((RenderChunk(chunk_pos, true)));
+        if let Some((mut render_chunk, mut transform)) = pool.pop() {
+            render_chunk.0 = chunk_pos;
+            render_chunk.1 = true;
+            transform.translation = HybridVec2::from_chunk(chunk_pos);
+            // *visibility = Visibility::Visible;
+            continue;
+        }
+
+        let mut render_chunk = commands.spawn((
+            RenderChunk(chunk_pos, true),
+            WorldTransform::from_chunk(chunk_pos),
+        ));
 
         render_chunk.with_children(|spawner| {
             for tile_pos in 0..=255 {
                 let tile_pos = TilePosition::new(tile_pos);
                 let (x, y) = tile_pos.to_xy();
-                let tile_vec2 = Vec2::new(x as f32, y as f32);
-                let translation = HybridVec2::from_chunk_tile(chunk_pos, tile_vec2);
+                let translation = (Vec2::new(x as f32, y as f32) * TILE_SIZE as f32).extend(0.0);
                 spawner.spawn((
                     RenderTile(tile_pos),
                     Sprite::default(),
-                    WorldTransform::from_translation(translation),
+                    Transform::from_translation(translation),
                 ));
             }
         });
@@ -129,9 +141,9 @@ fn cleanup(mut commands: Commands, query: Query<Entity, With<RenderChunk>>) {
 }
 
 #[derive(Debug, Component)]
-pub struct RenderTile(pub TilePosition);
-
-#[derive(Debug, Component)]
-#[require(InheritedVisibility)]
+#[require(Visibility)]
 #[require(Transform)]
 pub struct RenderChunk(pub IVec2, pub bool);
+
+#[derive(Debug, Component)]
+pub struct RenderTile(pub TilePosition);
