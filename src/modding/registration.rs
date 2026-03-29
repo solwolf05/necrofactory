@@ -3,6 +3,7 @@ use std::{
     error::Error,
     fmt::Display,
     fs,
+    marker::PhantomData,
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -11,165 +12,149 @@ use bevy::{
     prelude::*,
     tasks::{IoTaskPool, Task, futures_lite::future},
 };
-use serde::Deserialize;
 
-use crate::{
-    input::{InputAction, InputBinding},
-    modding::{
-        Id, ModInfo, ModLoadState, ModRegistry,
-        types::{Path as DefPath, Registry},
-    },
-    world::tile::TileDef,
+use crate::modding::{
+    Definition, Id, ModInfo, ModLoadState, ModRegistry,
+    types::{DefPath, Registry},
 };
 
 const MAX_CONCURRENT_IO: usize = 10;
 
 #[derive(Debug, Default, Resource)]
-pub struct PendingDefs {
-    pub inputs: VecDeque<(Id<ModInfo>, PathBuf)>,
-    pub tiles: VecDeque<(Id<ModInfo>, PathBuf)>,
-}
+pub struct TotalPending(pub usize);
 
-impl PendingDefs {
-    pub fn len(&self) -> usize {
-        self.inputs.len() + self.tiles.len()
-    }
+#[derive(Debug, Resource)]
+pub struct Pending<D: Definition>(pub VecDeque<(Id<ModInfo>, PathBuf)>, PhantomData<D>);
 
-    pub fn is_empty(&self) -> bool {
-        self.inputs.is_empty() && self.tiles.is_empty()
+impl<D: Definition> Default for Pending<D> {
+    fn default() -> Self {
+        Self(Default::default(), Default::default())
     }
 }
 
 #[derive(Debug, Default, Resource)]
-pub struct ActiveDefs {
-    pub inputs: Vec<Task<Result<(DefPath, InputAction), DefinitionLoadError>>>,
-    pub tiles: Vec<Task<Result<(DefPath, TileDef), DefinitionLoadError>>>,
-}
+pub struct TotalActive(pub usize);
 
-impl ActiveDefs {
-    pub fn len(&self) -> usize {
-        self.inputs.len() + self.tiles.len()
-    }
+#[derive(Debug, Resource)]
+pub struct Active<D: Definition>(pub Vec<Task<Result<(DefPath, D), DefinitionLoadError>>>);
 
-    pub fn is_empty(&self) -> bool {
-        self.inputs.is_empty() && self.tiles.is_empty()
+impl<D: Definition> Default for Active<D> {
+    fn default() -> Self {
+        Self(Default::default())
     }
 }
 
 #[derive(Debug, Default, Resource)]
-pub struct CompleteDefs {
-    pub inputs: usize,
-    pub tiles: usize,
-}
+pub struct TotalComplete(pub usize);
 
-impl CompleteDefs {
-    pub fn len(&self) -> usize {
-        self.inputs + self.tiles
+#[derive(Debug, Resource)]
+pub struct Complete<D: Definition>(pub usize, PhantomData<D>);
+
+impl<D: Definition> Default for Complete<D> {
+    fn default() -> Self {
+        Self(Default::default(), Default::default())
     }
 }
 
 #[derive(Debug, Resource)]
 pub struct ModRegistrationTime(Instant);
 
-pub fn start_registration_time(mut commands: Commands) {
+pub fn setup(mut commands: Commands) {
     commands.insert_resource(ModRegistrationTime(Instant::now()));
+    commands.init_resource::<TotalPending>();
+    commands.init_resource::<TotalActive>();
+    commands.init_resource::<TotalComplete>();
 }
 
-pub fn log_registration_completion(time: Res<ModRegistrationTime>) {
+pub fn cleanup(mut commands: Commands, time: Res<ModRegistrationTime>) {
     info!(
         "Mod registration complete ({}ms)",
         time.0.elapsed().as_millis_f32()
     );
+    commands.remove_resource::<ModRegistrationTime>();
+    commands.remove_resource::<TotalPending>();
+    commands.remove_resource::<TotalActive>();
+    commands.remove_resource::<TotalComplete>();
 }
 
-pub fn log_registration(
-    pending: Res<PendingDefs>,
-    active: Res<ActiveDefs>,
-    complete: Res<CompleteDefs>,
-) {
-    let total = pending.len() + active.len() + complete.len();
+pub fn log(pending: Res<TotalPending>, active: Res<TotalActive>, complete: Res<TotalComplete>) {
+    let total = pending.0 + active.0 + complete.0;
 
     info!(
         "{} / {} ({}%)",
-        complete.len(),
+        complete.0,
         total,
-        complete.len() * 100 / (total)
+        complete.0 * 100 / (total)
     )
 }
 
-pub fn discover_definitions(mods: Res<ModRegistry>, mut pending: ResMut<PendingDefs>) {
-    for (id, _, mod_info) in mods.iter_with_id() {
-        pending.inputs.extend(read_mod_dir(id, mod_info, "inputs"));
-        pending.tiles.extend(read_mod_dir(id, mod_info, "tiles"));
-    }
+pub fn discover<D: Definition>(
+    mut commands: Commands,
+    mods: Res<ModRegistry>,
+    mut total_pending: ResMut<TotalPending>,
+) {
+    let definitions: VecDeque<(Id<ModInfo>, PathBuf)> = mods
+        .iter_enabled_with_id()
+        .flat_map(|(id, _, mod_info)| read_mod_dir(id, mod_info, D::DIR))
+        .collect();
+    total_pending.0 += definitions.len();
+    commands.insert_resource(Pending::<D>(definitions, PhantomData));
+    commands.insert_resource(Active::<D>::default());
+    commands.insert_resource(Complete::<D>::default());
 }
 
 fn read_mod_dir(id: Id<ModInfo>, mod_info: &ModInfo, path: &str) -> Vec<(Id<ModInfo>, PathBuf)> {
-    read_dir(&mod_info.path.join(path))
-        .map(|path| (id, path))
-        .collect()
-}
-
-fn read_dir(path: &Path) -> impl Iterator<Item = PathBuf> {
+    let path: &Path = &mod_info.path.join(path);
     fs::read_dir(path)
         .into_iter()
         .flatten()
         .flatten()
-        .map(|entry| entry.path())
+        .map(|entry| (id, entry.path()))
+        .collect()
 }
 
-pub fn spawn_registration(
+pub fn clear<D: Definition>(mut registry: ResMut<Registry<D>>) {
+    registry.clear();
+}
+
+pub fn spawn<D: Definition>(
     mods: Res<ModRegistry>,
-    mut pending: ResMut<PendingDefs>,
-    mut active: ResMut<ActiveDefs>,
+    mut pending: ResMut<Pending<D>>,
+    mut active: ResMut<Active<D>>,
+    mut total_pending: ResMut<TotalPending>,
+    mut total_active: ResMut<TotalActive>,
 ) {
     let pool = IoTaskPool::get();
 
-    while active.len() < MAX_CONCURRENT_IO {
-        if let Some((mod_id, path)) = pending.inputs.pop_front() {
-            let mod_info = mods.get(mod_id).unwrap().clone();
-            active.inputs.push(pool.spawn(load_input(mod_info, path)));
-            continue;
-        }
+    while active.0.len() < MAX_CONCURRENT_IO
+        && let Some((mod_id, path)) = pending.0.pop_front()
+    {
+        let mod_info = mods.get(mod_id).unwrap().clone();
+        active.0.push(pool.spawn(D::load(mod_info, path)));
 
-        if let Some((mod_id, path)) = pending.tiles.pop_front() {
-            let mod_info = mods.get(mod_id).unwrap().clone();
-            active.tiles.push(pool.spawn(load_tile(mod_info, path)));
-            continue;
-        }
-
-        break;
+        total_pending.0 -= 1;
+        total_active.0 += 1;
     }
 }
 
-pub fn poll_registration(
-    mut active: ResMut<ActiveDefs>,
-    mut complete: ResMut<CompleteDefs>,
-    inputs: ResMut<Registry<InputAction>>,
-    tiles: ResMut<Registry<TileDef>>,
+pub fn poll<D: Definition>(
+    mut active: ResMut<Active<D>>,
+    mut complete: ResMut<Complete<D>>,
+    mut registry: ResMut<Registry<D>>,
+    mut total_active: ResMut<TotalActive>,
+    mut total_complete: ResMut<TotalComplete>,
 ) {
-    poll_registry(
-        &mut active.inputs,
-        &mut complete.inputs,
-        inputs.into_inner(),
-    );
-    poll_registry(&mut active.tiles, &mut complete.tiles, tiles.into_inner());
-}
-
-fn poll_registry<T>(
-    tasks: &mut Vec<Task<Result<(DefPath, T), DefinitionLoadError>>>,
-    complete: &mut usize,
-    registry: &mut Registry<T>,
-) {
-    tasks.retain_mut(|task| {
+    active.0.retain_mut(|task| {
         if let Some(result) = future::block_on(future::poll_once(task)) {
             match result {
                 Ok((path, def)) => {
-                    *complete += 1;
+                    complete.0 += 1;
                     registry.register(path, def);
                 }
                 Err(err) => error!("Failed to load definition: {}", err),
             }
+            total_active.0 -= 1;
+            total_complete.0 += 1;
             false
         } else {
             true
@@ -177,64 +162,14 @@ fn poll_registry<T>(
     });
 }
 
-pub fn check_registries_loaded(
+pub fn check_loaded(
     mut next_state: ResMut<NextState<ModLoadState>>,
-    pending: Res<PendingDefs>,
-    active: Res<ActiveDefs>,
+    pending: Res<TotalPending>,
+    active: Res<TotalActive>,
 ) {
-    if pending.is_empty() && active.is_empty() {
+    if pending.0 == 0 && active.0 == 0 {
         next_state.set(ModLoadState::LoadAssets);
     }
-}
-
-async fn load_input(
-    mod_info: ModInfo,
-    path: PathBuf,
-) -> Result<(DefPath, InputAction), DefinitionLoadError> {
-    #[derive(Deserialize)]
-    struct RawInputAction {
-        path: DefPath,
-        name: String,
-        default: InputBinding,
-    }
-
-    let string = fs::read_to_string(&path)?;
-    let raw: RawInputAction = ron::from_str(&string)?;
-
-    let def_path = mod_info.metadata.id.join(raw.path);
-
-    Ok((
-        def_path,
-        InputAction {
-            name: raw.name,
-            default: raw.default,
-        },
-    ))
-}
-
-async fn load_tile(
-    mod_info: ModInfo,
-    path: PathBuf,
-) -> Result<(DefPath, TileDef), DefinitionLoadError> {
-    #[derive(Deserialize)]
-    struct RawTileDef {
-        path: DefPath,
-        sprite_path: String,
-        friction: f32,
-    }
-
-    let string = fs::read_to_string(&path)?;
-    let raw: RawTileDef = ron::from_str(&string)?;
-
-    let def_path = mod_info.metadata.id.join(raw.path);
-
-    Ok((
-        def_path,
-        TileDef {
-            sprite_path: raw.sprite_path,
-            friction: raw.friction,
-        },
-    ))
 }
 
 #[derive(Debug)]

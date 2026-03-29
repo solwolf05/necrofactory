@@ -1,4 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::PathBuf,
+};
 
 use bevy::{
     input::{InputSystems, mouse::MouseWheel},
@@ -8,8 +12,9 @@ use bevy::{
 use serde::Deserialize;
 
 use crate::{
+    GameState,
     math::HybridVec2,
-    modding::{Id, ModLoadState, Registry},
+    modding::{DefPath, Definition, DefinitionLoadError, Id, ModInfo, ModLoadState, Registry},
     world::{BaseChunk, TILE_SIZE},
 };
 
@@ -28,7 +33,7 @@ impl Plugin for InputPlugin {
                     button_input_system,
                     scroll_input_system,
                     cursor_input_system,
-                    world_cursor_input_system,
+                    world_cursor_input_system.run_if(in_state(GameState::InGame)),
                 )
                     .after(InputSystems),
             );
@@ -312,6 +317,35 @@ impl InputAction {
 
     pub(crate) fn nameless(default: InputBinding) -> Self {
         Self::new("", default)
+    }
+}
+
+impl Definition for InputAction {
+    const DIR: &'static str = "inputs";
+
+    async fn load(
+        mod_info: ModInfo,
+        path: PathBuf,
+    ) -> Result<(DefPath, Self), DefinitionLoadError> {
+        #[derive(Deserialize)]
+        struct RawInputAction {
+            path: DefPath,
+            name: String,
+            default: InputBinding,
+        }
+
+        let string = fs::read_to_string(&path)?;
+        let raw: RawInputAction = ron::from_str(&string)?;
+
+        let def_path = mod_info.id().join(raw.path);
+
+        Ok((
+            def_path,
+            InputAction {
+                name: raw.name,
+                default: raw.default,
+            },
+        ))
     }
 }
 

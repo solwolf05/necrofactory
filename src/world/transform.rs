@@ -1,15 +1,12 @@
 use bevy::prelude::*;
 
-use crate::{
-    math::HybridVec2,
-    world::{CHUNK_SIZE, TILE_SIZE},
-};
+use crate::{math::HybridVec2, world::TILE_SIZE};
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RebaseSet;
 
 /// The chunk position that the world is centered around
-#[derive(Debug, Default, Resource)]
+#[derive(Debug, Default, Resource, Reflect)]
 pub struct BaseChunk(pub IVec2);
 
 /// Used for rendering and other operations that require floating-point coordinates.
@@ -55,7 +52,7 @@ pub fn apply_world_transform(
 }
 
 fn rebase(base: &BaseChunk, transform: &mut Transform, world_transform: &WorldTransform) {
-    let world_pos = world_transform.translation - HybridVec2::from_chunk(base.0 * CHUNK_SIZE);
+    let world_pos = world_transform.translation - HybridVec2::from_chunk(base.0);
     let pos = world_pos * TILE_SIZE;
     transform.translation = Vec2::from(pos).extend(0.0);
 }

@@ -14,9 +14,12 @@ pub fn discover_mods(
         Ok(e) => e.flatten(),
         Err(e) => {
             error!("Error reading mods dir: {}", e);
+            next_state.set(ModLoadState::Validate);
             return;
         }
     };
+
+    mods.clear();
 
     for dir in entries {
         let path = dir.path();
@@ -45,7 +48,6 @@ pub fn discover_mods(
     }
 
     let elapsed = instant.elapsed();
-
     info!("Mod discovery complete ({}ms)", elapsed.as_millis_f32());
 
     next_state.set(ModLoadState::Validate);

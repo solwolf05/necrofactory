@@ -2,6 +2,7 @@
 
 use bevy::state::state::States;
 
+pub mod combat;
 pub mod debug;
 pub mod graphics;
 pub mod input;

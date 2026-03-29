@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Resource, Clone)]
 pub struct Registry<T> {
-    definitions: Vec<(Path, T)>,
-    lookup: HashMap<Path, Id<T>>,
+    definitions: Vec<(DefPath, T)>,
+    lookup: HashMap<DefPath, Id<T>>,
 }
 
 impl<T> Registry<T> {
@@ -28,7 +28,7 @@ impl<T> Registry<T> {
 
     /// Registers a definition with the given path and returns its ID.
     /// If the definition already exists, it is replaced and the existing ID is returned.
-    pub fn register(&mut self, path: impl TryInto<Path>, def: T) -> Option<Id<T>> {
+    pub fn register(&mut self, path: impl TryInto<DefPath>, def: T) -> Option<Id<T>> {
         let path = path.try_into().ok()?;
         if let Some(id) = self.lookup.get(&path).copied() {
             self.definitions[id.index()].1 = def;
@@ -42,6 +42,11 @@ impl<T> Registry<T> {
         Some(id)
     }
 
+    pub fn clear(&mut self) {
+        self.definitions.clear();
+        self.lookup.clear();
+    }
+
     pub fn len(&self) -> usize {
         self.definitions.len()
     }
@@ -51,13 +56,13 @@ impl<T> Registry<T> {
     }
 
     /// Looks up the id of the definition associated with the given path.
-    pub fn lookup(&self, path: impl TryInto<Path>) -> Option<Id<T>> {
+    pub fn lookup(&self, path: impl TryInto<DefPath>) -> Option<Id<T>> {
         let path = path.try_into().ok()?;
         self.lookup.get(&path).copied()
     }
 
     /// Resolves the path of the definition associated with the given ID.
-    pub fn resolve(&self, id: Id<T>) -> Option<&Path> {
+    pub fn resolve(&self, id: Id<T>) -> Option<&DefPath> {
         self.definitions.get(id.index()).map(|r| &r.0)
     }
 
@@ -67,7 +72,7 @@ impl<T> Registry<T> {
     }
 
     /// Retrieves the definition associated with the given path.
-    pub fn get_by_path(&self, path: impl TryInto<Path>) -> Option<&T> {
+    pub fn get_by_path(&self, path: impl TryInto<DefPath>) -> Option<&T> {
         self.lookup(path).and_then(|id| self.get(id))
     }
 
@@ -75,19 +80,19 @@ impl<T> Registry<T> {
         self.definitions.len() > id.index()
     }
 
-    pub fn contains_path(&self, path: impl TryInto<Path>) -> bool {
+    pub fn contains_path(&self, path: impl TryInto<DefPath>) -> bool {
         let Ok(path) = path.try_into() else {
             return false;
         };
         self.lookup.contains_key(&path)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Path, &T)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&DefPath, &T)> {
         self.definitions.iter().map(|(p, t)| (p, t))
     }
 
     /// Order is guaranteed to be from lowest to highest id.
-    pub fn iter_with_id(&self) -> impl Iterator<Item = (Id<T>, &Path, &T)> {
+    pub fn iter_with_id(&self) -> impl Iterator<Item = (Id<T>, &DefPath, &T)> {
         self.definitions
             .iter()
             .enumerate()
@@ -191,25 +196,25 @@ impl<T> Hash for Id<T> {
 
 /// A newtype wrapper over a `String` that ensures the segment is valid.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deref)]
-pub struct PathSegment(String);
+pub struct DefPathSegment(String);
 
-impl PathSegment {
+impl DefPathSegment {
     pub fn new(segment: &str) -> Option<Self> {
         is_valid_segment(segment).then(|| Self(segment.into()))
     }
 
-    pub fn join(&self, other: Path) -> Path {
-        Path(format!("{}::{}", self, other))
+    pub fn join(&self, other: DefPath) -> DefPath {
+        DefPath(format!("{}::{}", self, other))
     }
 }
 
-impl Display for PathSegment {
+impl Display for DefPathSegment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl TryFrom<&str> for PathSegment {
+impl TryFrom<&str> for DefPathSegment {
     type Error = ();
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
@@ -217,7 +222,7 @@ impl TryFrom<&str> for PathSegment {
     }
 }
 
-impl FromStr for PathSegment {
+impl FromStr for DefPathSegment {
     type Err = ();
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
@@ -225,7 +230,7 @@ impl FromStr for PathSegment {
     }
 }
 
-impl Serialize for PathSegment {
+impl Serialize for DefPathSegment {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -234,7 +239,7 @@ impl Serialize for PathSegment {
     }
 }
 
-impl<'de> Deserialize<'de> for PathSegment {
+impl<'de> Deserialize<'de> for DefPathSegment {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -248,9 +253,9 @@ impl<'de> Deserialize<'de> for PathSegment {
 
 /// A newtype wrapper over a `String` that ensures the path is valid.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deref)]
-pub struct Path(String);
+pub struct DefPath(String);
 
-impl Path {
+impl DefPath {
     pub fn new(path: &str) -> Option<Self> {
         if !Self::is_valid_path(path) {
             return None;
@@ -265,13 +270,16 @@ impl Path {
         Some(Self(path.into()))
     }
 
-    pub fn from_parts(namespace: impl TryInto<Path>, path: impl TryInto<Path>) -> Option<Self> {
+    pub fn from_parts(
+        namespace: impl TryInto<DefPath>,
+        path: impl TryInto<DefPath>,
+    ) -> Option<Self> {
         let namespace = namespace.try_into().ok()?;
         let path = path.try_into().ok()?;
         Self::new(&format!("{}::{}", namespace, path))
     }
 
-    pub fn join(&self, other: Path) -> Path {
+    pub fn join(&self, other: DefPath) -> DefPath {
         Self(format!("{}::{}", self, other))
     }
 
@@ -302,19 +310,19 @@ impl Path {
     }
 }
 
-impl Display for Path {
+impl Display for DefPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl From<PathSegment> for Path {
-    fn from(value: PathSegment) -> Self {
+impl From<DefPathSegment> for DefPath {
+    fn from(value: DefPathSegment) -> Self {
         Self(value.0)
     }
 }
 
-impl TryFrom<&str> for Path {
+impl TryFrom<&str> for DefPath {
     type Error = ();
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
@@ -322,7 +330,7 @@ impl TryFrom<&str> for Path {
     }
 }
 
-impl TryFrom<String> for Path {
+impl TryFrom<String> for DefPath {
     type Error = ();
 
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
@@ -330,7 +338,7 @@ impl TryFrom<String> for Path {
     }
 }
 
-impl FromStr for Path {
+impl FromStr for DefPath {
     type Err = ();
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
@@ -338,7 +346,7 @@ impl FromStr for Path {
     }
 }
 
-impl Serialize for Path {
+impl Serialize for DefPath {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -347,7 +355,7 @@ impl Serialize for Path {
     }
 }
 
-impl<'de> Deserialize<'de> for Path {
+impl<'de> Deserialize<'de> for DefPath {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

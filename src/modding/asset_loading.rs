@@ -13,13 +13,13 @@ pub struct PendingSprites(pub HashMap<Id<TileDef>, Handle<Image>>);
 
 #[derive(Debug, Default, Resource)]
 pub struct TileSprites {
-    pub(self) missing: Handle<Image>,
-    complete: HashMap<Id<TileDef>, Handle<Image>>,
+    missing: Handle<Image>,
+    sprites: HashMap<Id<TileDef>, Handle<Image>>,
 }
 
 impl TileSprites {
     pub fn get(&self, id: Id<TileDef>) -> Handle<Image> {
-        self.complete.get(&id).unwrap_or(&self.missing).clone()
+        self.sprites.get(&id).unwrap_or(&self.missing).clone()
     }
 }
 
@@ -32,6 +32,8 @@ pub fn begin_asset_loading(
     let missing = asset_server.load("missing.png");
     sprites.missing = missing.clone();
 
+    sprites.sprites.clear();
+
     let mut pending = PendingSprites::default();
     for (id, _, tile) in tiles.iter_with_id() {
         let handle = asset_server.load(&tile.sprite_path);
@@ -40,7 +42,7 @@ pub fn begin_asset_loading(
     commands.insert_resource(pending);
 }
 
-pub fn check_assets_loaded(
+pub fn check_loaded(
     mut next_state: ResMut<NextState<ModLoadState>>,
     mut sprites: ResMut<TileSprites>,
     mut pending: ResMut<PendingSprites>,
@@ -65,7 +67,7 @@ pub fn check_assets_loaded(
 
     for id in to_complete {
         if let Some((id, handle)) = pending.0.remove_entry(&id) {
-            sprites.complete.insert(id, handle);
+            sprites.sprites.insert(id, handle);
         }
     }
 

@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display};
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::{collections::HashMap, fs};
 
@@ -9,24 +10,19 @@ use bevy::{
 
 use serde::Deserialize;
 
-use crate::modding::registration::{log_registration_completion, start_registration_time};
 use crate::{
     GameState,
     input::InputAction,
     modding::{
-        asset_loading::{begin_asset_loading, check_assets_loaded},
-        discovery::discover_mods,
-        finalization::finalize,
-        registration::{
-            ActiveDefs, CompleteDefs, PendingDefs, check_registries_loaded, discover_definitions,
-            log_registration, poll_registration, spawn_registration,
-        },
+        asset_loading::begin_asset_loading, discovery::discover_mods, finalization::finalize,
         validation::validate_mods,
     },
     world::tile::TileDef,
 };
 
 pub use asset_loading::TileSprites;
+pub use registration::DefinitionLoadError;
+pub use types::*;
 
 mod asset_loading;
 mod discovery;
@@ -35,7 +31,7 @@ mod registration;
 mod types;
 mod validation;
 
-pub use types::{Id, PathSegment, Registry};
+pub use types::{DefPathSegment, Id, Registry};
 
 /// Loads mods at the start of the game and registers their types in the registry.
 pub struct ModPlugin;
@@ -44,38 +40,29 @@ impl Plugin for ModPlugin {
     fn build(&self, app: &mut bevy::app::App) {
         app.add_sub_state::<ModLoadState>()
             .init_resource::<ModRegistry>()
-            .init_resource::<PendingDefs>()
-            .init_resource::<ActiveDefs>()
-            .init_resource::<CompleteDefs>()
-            .init_resource::<TileSprites>()
-            .init_resource::<Registry<InputAction>>()
-            .init_resource::<Registry<TileDef>>()
-            .add_systems(OnEnter(ModLoadState::Discover), discover_mods)
-            .add_systems(OnExit(ModLoadState::Discover), check_mods)
-            .add_systems(OnEnter(ModLoadState::Validate), validate_mods)
-            .add_systems(OnExit(ModLoadState::Validate), check_mod_load_order)
-            .add_systems(
-                OnEnter(ModLoadState::Register),
-                (discover_definitions, start_registration_time),
-            )
+            .init_resource::<TileSprites>();
+
+        app.add_systems(OnEnter(ModLoadState::Discover), discover_mods);
+
+        app.add_systems(OnEnter(ModLoadState::Validate), validate_mods)
+            .add_systems(OnExit(ModLoadState::Validate), check_mods);
+
+        app.add_systems(OnEnter(ModLoadState::Register), registration::setup)
             .add_systems(
                 Update,
-                (
-                    spawn_registration,
-                    poll_registration,
-                    log_registration,
-                    check_registries_loaded.after(poll_registration),
-                )
+                (registration::log, registration::check_loaded)
                     .run_if(in_state(ModLoadState::Register)),
             )
-            .add_systems(OnExit(ModLoadState::Register), log_registration_completion)
-            .add_systems(OnEnter(ModLoadState::LoadAssets), begin_asset_loading)
+            .add_systems(OnExit(ModLoadState::Register), registration::cleanup);
+
+        app.add_systems(OnEnter(ModLoadState::LoadAssets), begin_asset_loading)
             .add_systems(
                 Update,
-                check_assets_loaded.run_if(in_state(ModLoadState::LoadAssets)),
+                asset_loading::check_loaded.run_if(in_state(ModLoadState::LoadAssets)),
             )
-            .add_systems(OnExit(ModLoadState::LoadAssets), asset_loading::cleanup)
-            .add_systems(OnEnter(ModLoadState::Finalize), finalize)
+            .add_systems(OnExit(ModLoadState::LoadAssets), asset_loading::cleanup);
+
+        app.add_systems(OnEnter(ModLoadState::Finalize), finalize)
             .add_systems(OnEnter(ModLoadState::Finalize), check_registries);
     }
 }
@@ -88,6 +75,32 @@ impl Plugin for ModAssetSourcePlugin {
             AssetSourceId::Name("mods".into()),
             AssetSourceBuilder::new(|| Box::new(FileAssetReader::new(mods_path()))),
         );
+    }
+}
+
+pub struct DefinitionPlugin<D: Definition>(PhantomData<D>);
+
+impl<D: Definition> Plugin for DefinitionPlugin<D> {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Registry<D>>()
+            .add_systems(
+                OnEnter(ModLoadState::Register),
+                (
+                    registration::discover::<D>.after(registration::setup),
+                    registration::clear::<D>,
+                ),
+            )
+            .add_systems(
+                Update,
+                (registration::spawn::<D>, registration::poll::<D>)
+                    .run_if(in_state(ModLoadState::Register)),
+            );
+    }
+}
+
+impl<D: Definition> Default for DefinitionPlugin<D> {
+    fn default() -> Self {
+        Self(Default::default())
     }
 }
 
@@ -122,9 +135,6 @@ fn check_registries(inputs: Res<Registry<InputAction>>, tiles: Res<Registry<Tile
 
 fn check_mods(mods: Res<ModRegistry>) {
     info!("Mods:\n{}", *mods);
-}
-
-fn check_mod_load_order(mods: Res<ModRegistry>) {
     info!(
         "Mod load order: {}",
         mods.load_order
@@ -137,13 +147,13 @@ fn check_mod_load_order(mods: Res<ModRegistry>) {
 
 #[derive(Default, Resource, Clone)]
 pub struct ModRegistry {
-    mods: Vec<(PathSegment, ModInfo)>,
-    lookup: HashMap<PathSegment, Id<ModInfo>>,
+    mods: Vec<(DefPathSegment, ModInfo)>,
+    lookup: HashMap<DefPathSegment, Id<ModInfo>>,
     pub load_order: Vec<Id<ModInfo>>,
 }
 
 impl ModRegistry {
-    pub fn register(&mut self, segment: PathSegment, mod_info: ModInfo) -> Id<ModInfo> {
+    pub fn register(&mut self, segment: DefPathSegment, mod_info: ModInfo) -> Id<ModInfo> {
         if let Some(id) = self.lookup.get(&segment).copied() {
             self.mods[id.index()].1 = mod_info;
             return id;
@@ -162,7 +172,7 @@ impl ModRegistry {
         }
     }
 
-    pub fn enable_segment(&mut self, segment: &PathSegment) {
+    pub fn enable_segment(&mut self, segment: &DefPathSegment) {
         if let Some(mod_info) = self.get_by_segment_mut(segment) {
             mod_info.enable();
         }
@@ -174,10 +184,16 @@ impl ModRegistry {
         }
     }
 
-    pub fn disable_segment(&mut self, segment: &PathSegment) {
+    pub fn disable_segment(&mut self, segment: &DefPathSegment) {
         if let Some(mod_info) = self.get_by_segment_mut(segment) {
             mod_info.disable();
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.mods.clear();
+        self.lookup.clear();
+        self.load_order.clear();
     }
 
     pub fn len(&self) -> usize {
@@ -192,11 +208,11 @@ impl ModRegistry {
         self.mods.iter().filter(|(_, m)| !m.enabled()).count()
     }
 
-    pub fn lookup(&self, segment: &PathSegment) -> Option<Id<ModInfo>> {
+    pub fn lookup(&self, segment: &DefPathSegment) -> Option<Id<ModInfo>> {
         self.lookup.get(&segment).copied()
     }
 
-    pub fn resolve(&self, id: Id<ModInfo>) -> Option<&PathSegment> {
+    pub fn resolve(&self, id: Id<ModInfo>) -> Option<&DefPathSegment> {
         self.mods.get(id.index()).map(|r| &r.0)
     }
 
@@ -208,11 +224,11 @@ impl ModRegistry {
         self.mods.get_mut(id.index()).map(|r| &mut r.1)
     }
 
-    pub fn get_by_segment(&self, segment: &PathSegment) -> Option<&ModInfo> {
+    pub fn get_by_segment(&self, segment: &DefPathSegment) -> Option<&ModInfo> {
         self.lookup(segment).and_then(|id| self.get(id))
     }
 
-    pub fn get_by_segment_mut(&mut self, segment: &PathSegment) -> Option<&mut ModInfo> {
+    pub fn get_by_segment_mut(&mut self, segment: &DefPathSegment) -> Option<&mut ModInfo> {
         self.lookup(segment).and_then(|id| self.get_mut(id))
     }
 
@@ -220,29 +236,29 @@ impl ModRegistry {
         self.mods.len() > id.index()
     }
 
-    pub fn contains_path(&self, segment: &PathSegment) -> bool {
+    pub fn contains_path(&self, segment: &DefPathSegment) -> bool {
         self.lookup.contains_key(segment)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&PathSegment, &ModInfo)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&DefPathSegment, &ModInfo)> {
         self.mods.iter().map(|(s, t)| (s, t))
     }
 
-    pub fn iter_enabled(&self) -> impl Iterator<Item = (&PathSegment, &ModInfo)> {
+    pub fn iter_enabled(&self) -> impl Iterator<Item = (&DefPathSegment, &ModInfo)> {
         self.mods
             .iter()
             .filter(|(_, t)| t.enabled())
             .map(|(s, t)| (s, t))
     }
 
-    pub fn iter_disabled(&self) -> impl Iterator<Item = (&PathSegment, &ModInfo)> {
+    pub fn iter_disabled(&self) -> impl Iterator<Item = (&DefPathSegment, &ModInfo)> {
         self.mods
             .iter()
             .filter(|(_, t)| !t.enabled())
             .map(|(s, t)| (s, t))
     }
 
-    pub fn iter_with_id(&self) -> impl Iterator<Item = (Id<ModInfo>, &PathSegment, &ModInfo)> {
+    pub fn iter_with_id(&self) -> impl Iterator<Item = (Id<ModInfo>, &DefPathSegment, &ModInfo)> {
         self.mods
             .iter()
             .enumerate()
@@ -251,7 +267,7 @@ impl ModRegistry {
 
     pub fn iter_enabled_with_id(
         &self,
-    ) -> impl Iterator<Item = (Id<ModInfo>, &PathSegment, &ModInfo)> {
+    ) -> impl Iterator<Item = (Id<ModInfo>, &DefPathSegment, &ModInfo)> {
         self.mods
             .iter()
             .filter(|(_, t)| t.enabled())
@@ -261,7 +277,7 @@ impl ModRegistry {
 
     pub fn iter_disabled_with_id(
         &self,
-    ) -> impl Iterator<Item = (Id<ModInfo>, &PathSegment, &ModInfo)> {
+    ) -> impl Iterator<Item = (Id<ModInfo>, &DefPathSegment, &ModInfo)> {
         self.mods
             .iter()
             .filter(|(_, t)| !t.enabled())
@@ -300,7 +316,7 @@ impl ModInfo {
         &self.path
     }
 
-    pub fn id(&self) -> &PathSegment {
+    pub fn id(&self) -> &DefPathSegment {
         &self.metadata.id
     }
 
@@ -316,11 +332,11 @@ impl ModInfo {
         &self.metadata.author
     }
 
-    pub fn dependencies(&self) -> &HashMap<PathSegment, String> {
+    pub fn dependencies(&self) -> &HashMap<DefPathSegment, String> {
         &self.metadata.dependencies
     }
 
-    pub fn optional_dependencies(&self) -> &HashMap<PathSegment, String> {
+    pub fn optional_dependencies(&self) -> &HashMap<DefPathSegment, String> {
         &self.metadata.optional_dependencies
     }
 
@@ -383,12 +399,12 @@ impl Display for ModInfo {
 
 #[derive(Debug, Clone)]
 pub struct ModMetadata {
-    pub id: PathSegment,
+    pub id: DefPathSegment,
     pub name: String,
     pub version: String,
     pub author: String,
-    pub dependencies: HashMap<PathSegment, String>,
-    pub optional_dependencies: HashMap<PathSegment, String>,
+    pub dependencies: HashMap<DefPathSegment, String>,
+    pub optional_dependencies: HashMap<DefPathSegment, String>,
 }
 
 impl<'de> Deserialize<'de> for ModMetadata {
@@ -398,12 +414,12 @@ impl<'de> Deserialize<'de> for ModMetadata {
     {
         #[derive(Deserialize)]
         struct RawMetadata {
-            pub id: PathSegment,
+            pub id: DefPathSegment,
             pub name: String,
             pub version: String,
             pub author: String,
-            pub dependencies: Option<HashMap<PathSegment, String>>,
-            pub optional_dependencies: Option<HashMap<PathSegment, String>>,
+            pub dependencies: Option<HashMap<DefPathSegment, String>>,
+            pub optional_dependencies: Option<HashMap<DefPathSegment, String>>,
         }
 
         let raw = RawMetadata::deserialize(deserializer)?;
@@ -416,4 +432,13 @@ impl<'de> Deserialize<'de> for ModMetadata {
             optional_dependencies: raw.optional_dependencies.unwrap_or_default(),
         })
     }
+}
+
+pub trait Definition: Sized + Send + Sync + 'static {
+    const DIR: &'static str;
+
+    fn load(
+        mod_info: ModInfo,
+        path: PathBuf,
+    ) -> impl Future<Output = Result<(DefPath, Self), DefinitionLoadError>> + Send;
 }

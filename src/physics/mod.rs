@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    GameState,
     modding::Registry,
     physics::collision::Aabb,
     world::{World, WorldTransform, tile::TileDef},
@@ -16,11 +17,17 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             FixedUpdate,
+            (apply_gravity, apply_drag)
+                .before(PhysicsSet)
+                .run_if(in_state(GameState::InGame)),
+        )
+        .add_systems(
+            FixedUpdate,
             (integrate_velocity, solve_tile_collisions)
                 .chain()
-                .in_set(PhysicsSet),
-        )
-        .add_systems(FixedUpdate, (apply_gravity, apply_drag).before(PhysicsSet));
+                .in_set(PhysicsSet)
+                .run_if(in_state(GameState::InGame)),
+        );
     }
 }
 

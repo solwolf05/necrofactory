@@ -6,7 +6,7 @@ use bevy::{
     window::{PresentMode, WindowMode, WindowResolution},
 };
 
-use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
+// use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use necrofactory::{
     GameState,
     debug::{
@@ -15,10 +15,13 @@ use necrofactory::{
     },
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState, WorldCursor},
-    modding::{Id, ModAssetSourcePlugin, ModPlugin, Registry},
+    modding::{DefinitionPlugin, Id, ModAssetSourcePlugin, ModPlugin, Registry},
     physics::{Collider, Drag, Mass, PhysicsPlugin, Restitution, Rigidbody},
     player::{FuelTank, JetPackPlugin, Jetpack, JetpackControl, Player},
-    world::{BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform, tile::Tile},
+    world::{
+        BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform,
+        tile::{Tile, TileDef},
+    },
     world_gen::WorldGenPlugin,
 };
 
@@ -45,6 +48,10 @@ fn main() -> AppExit {
         )
         .add_plugins((
             ModPlugin,
+            DefinitionPlugin::<TileDef>::default(),
+            DefinitionPlugin::<InputAction>::default(),
+        ))
+        .add_plugins((
             WorldPlugin,
             WorldGenPlugin,
             GraphicsPlugin,

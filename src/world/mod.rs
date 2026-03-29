@@ -5,9 +5,12 @@ use bevy::{math::I64Vec2, prelude::*};
 use chunk::Chunk;
 use tile::Tile;
 
-use crate::world::{
-    chunk::TilePosition,
-    transform::{apply_rebase, apply_world_transform},
+use crate::{
+    GameState,
+    world::{
+        chunk::TilePosition,
+        transform::{apply_rebase, apply_world_transform},
+    },
 };
 
 pub use transform::{BaseChunk, RebaseSet, WorldTransform};
@@ -28,13 +31,25 @@ pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<World>()
-            .init_resource::<BaseChunk>()
+        app.add_systems(OnEnter(GameState::InGame), setup)
             .add_systems(
                 PostUpdate,
-                (apply_rebase, apply_world_transform).in_set(RebaseSet),
-            );
+                (apply_rebase, apply_world_transform)
+                    .in_set(RebaseSet)
+                    .run_if(in_state(GameState::InGame)),
+            )
+            .add_systems(OnExit(GameState::InGame), cleanup);
     }
+}
+
+fn setup(mut commands: Commands) {
+    commands.init_resource::<World>();
+    commands.init_resource::<BaseChunk>();
+}
+
+fn cleanup(mut commands: Commands) {
+    commands.remove_resource::<World>();
+    commands.remove_resource::<BaseChunk>();
 }
 
 #[derive(Debug, Default, Resource)]

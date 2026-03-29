@@ -6,7 +6,7 @@ use std::{
 use bevy::prelude::*;
 use semver::{Version, VersionReq};
 
-use crate::modding::{Id, ModInfo, ModLoadState, ModRegistry, PathSegment};
+use crate::modding::{DefPathSegment, Id, ModInfo, ModLoadState, ModRegistry};
 
 pub fn validate_mods(
     mut next_state: ResMut<NextState<ModLoadState>>,
@@ -70,19 +70,19 @@ pub fn validate_mods(
 pub enum ModValidationError {
     /// A version constraint is not satisfied
     VersionMismatch {
-        mod_id: PathSegment,
-        dependency_id: PathSegment,
+        mod_id: DefPathSegment,
+        dependency_id: DefPathSegment,
         required: String,
         found: Option<String>,
     },
     /// Circular dependency detected
-    CircularDependency { cycle: Vec<PathSegment> },
+    CircularDependency { cycle: Vec<DefPathSegment> },
 }
 
 impl ModValidationError {
     #[allow(dead_code)]
     /// Returns the IDs of the mods involved in the error
-    pub fn mods(&self) -> Vec<&PathSegment> {
+    pub fn mods(&self) -> Vec<&DefPathSegment> {
         match self {
             ModValidationError::VersionMismatch { mod_id, .. } => vec![mod_id],
             ModValidationError::CircularDependency { cycle } => cycle.iter().collect(),
@@ -150,7 +150,7 @@ fn validate_dependencies(registry: &ModRegistry) -> Result<(), Vec<ModValidation
 fn validate_required_dependencies(
     registry: &ModRegistry,
     errors: &mut Vec<ModValidationError>,
-    mod_id: &PathSegment,
+    mod_id: &DefPathSegment,
     mod_info: &ModInfo,
 ) {
     for (dep_id, version_req) in mod_info.dependencies() {
@@ -193,7 +193,7 @@ fn validate_required_dependencies(
 fn validate_optional_dependencies(
     registry: &ModRegistry,
     errors: &mut Vec<ModValidationError>,
-    mod_id: &PathSegment,
+    mod_id: &DefPathSegment,
     mod_info: &ModInfo,
 ) {
     for (dep_id, version_req) in mod_info.optional_dependencies() {
@@ -261,7 +261,7 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
                     }
                 } else if rec_stack.contains(&dep_id) {
                     let cycle_start = path.iter().position(|&x| x == dep_id).unwrap();
-                    let cycle: Vec<PathSegment> = path[cycle_start..]
+                    let cycle: Vec<DefPathSegment> = path[cycle_start..]
                         .into_iter()
                         .map(|&id| registry.resolve(id).unwrap().clone())
                         .collect();
@@ -286,7 +286,7 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
                     }
                 } else if rec_stack.contains(&dep_id) {
                     let cycle_start = path.iter().position(|&x| x == dep_id).unwrap();
-                    let cycle: Vec<PathSegment> = path[cycle_start..]
+                    let cycle: Vec<DefPathSegment> = path[cycle_start..]
                         .into_iter()
                         .map(|&id| registry.resolve(id).unwrap().clone())
                         .collect();
@@ -413,22 +413,22 @@ mod tests {
             let mod_info = ModInfo {
                 path: std::path::PathBuf::from(format!("/mod/{}", id)),
                 metadata: ModMetadata {
-                    id: PathSegment::new(id).unwrap(),
+                    id: DefPathSegment::new(id).unwrap(),
                     name: format!("{} Name", id),
                     version: "1.0.0".to_string(),
                     author: "Test Author".to_string(),
                     dependencies: deps
                         .into_iter()
-                        .map(|(dep, ver)| (PathSegment::new(dep).unwrap(), ver.to_string()))
+                        .map(|(dep, ver)| (DefPathSegment::new(dep).unwrap(), ver.to_string()))
                         .collect(),
                     optional_dependencies: optional_deps
                         .into_iter()
-                        .map(|(dep, ver)| (PathSegment::new(dep).unwrap(), ver.to_string()))
+                        .map(|(dep, ver)| (DefPathSegment::new(dep).unwrap(), ver.to_string()))
                         .collect(),
                 },
                 enabled: true,
             };
-            registry.register(PathSegment::new(id).unwrap(), mod_info);
+            registry.register(DefPathSegment::new(id).unwrap(), mod_info);
         }
         registry
     }
@@ -453,10 +453,10 @@ mod tests {
 
         // Register mod_b first with matching version
         let mod_b_info = registry
-            .get_by_segment(&PathSegment::new("mod_b").unwrap())
+            .get_by_segment(&DefPathSegment::new("mod_b").unwrap())
             .unwrap()
             .clone();
-        registry.register(PathSegment::new("mod_b").unwrap(), mod_b_info);
+        registry.register(DefPathSegment::new("mod_b").unwrap(), mod_b_info);
 
         // This should not produce any errors
         let result = validate_dependencies(&registry);
@@ -592,13 +592,13 @@ mod tests {
         let order = result.unwrap();
         // mod_a should come before mod_b and mod_c
         let mod_a_id = registry
-            .lookup(&PathSegment::new("mod_a").unwrap())
+            .lookup(&DefPathSegment::new("mod_a").unwrap())
             .unwrap();
         let mod_b_id = registry
-            .lookup(&PathSegment::new("mod_b").unwrap())
+            .lookup(&DefPathSegment::new("mod_b").unwrap())
             .unwrap();
         let mod_c_id = registry
-            .lookup(&PathSegment::new("mod_c").unwrap())
+            .lookup(&DefPathSegment::new("mod_c").unwrap())
             .unwrap();
 
         let mod_a_pos = order.iter().position(|&id| id == mod_a_id).unwrap();
@@ -651,8 +651,8 @@ mod tests {
     #[test]
     fn test_validation_error_display_version_mismatch() {
         let error = ModValidationError::VersionMismatch {
-            mod_id: PathSegment::new("mod_a").unwrap(),
-            dependency_id: PathSegment::new("mod_b").unwrap(),
+            mod_id: DefPathSegment::new("mod_a").unwrap(),
+            dependency_id: DefPathSegment::new("mod_b").unwrap(),
             required: "^1.0".to_string(),
             found: None,
         };
@@ -661,8 +661,8 @@ mod tests {
         assert_eq!(error.to_string(), expected);
 
         let error_with_found = ModValidationError::VersionMismatch {
-            mod_id: PathSegment::new("mod_a").unwrap(),
-            dependency_id: PathSegment::new("mod_b").unwrap(),
+            mod_id: DefPathSegment::new("mod_a").unwrap(),
+            dependency_id: DefPathSegment::new("mod_b").unwrap(),
             required: "^2.0".to_string(),
             found: Some("1.0.0".to_string()),
         };
@@ -675,9 +675,9 @@ mod tests {
     fn test_validation_error_display_circular_dependency() {
         let error = ModValidationError::CircularDependency {
             cycle: vec![
-                PathSegment::new("a").unwrap(),
-                PathSegment::new("b").unwrap(),
-                PathSegment::new("c").unwrap(),
+                DefPathSegment::new("a").unwrap(),
+                DefPathSegment::new("b").unwrap(),
+                DefPathSegment::new("c").unwrap(),
             ],
         };
 
@@ -705,19 +705,19 @@ mod tests {
 
         let order = topological_sort(&registry).unwrap();
         let e_id = registry
-            .lookup(&PathSegment::new("mod_e").unwrap())
+            .lookup(&DefPathSegment::new("mod_e").unwrap())
             .unwrap();
         let d_id = registry
-            .lookup(&PathSegment::new("mod_d").unwrap())
+            .lookup(&DefPathSegment::new("mod_d").unwrap())
             .unwrap();
         let c_id = registry
-            .lookup(&PathSegment::new("mod_c").unwrap())
+            .lookup(&DefPathSegment::new("mod_c").unwrap())
             .unwrap();
         let b_id = registry
-            .lookup(&PathSegment::new("mod_b").unwrap())
+            .lookup(&DefPathSegment::new("mod_b").unwrap())
             .unwrap();
         let a_id = registry
-            .lookup(&PathSegment::new("mod_a").unwrap())
+            .lookup(&DefPathSegment::new("mod_a").unwrap())
             .unwrap();
 
         let e_pos = order.iter().position(|&id| id == e_id).unwrap();
