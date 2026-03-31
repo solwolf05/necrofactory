@@ -2,7 +2,11 @@ use bevy::math::{I64Vec2, Vec2};
 
 use crate::{
     math::{Hybrid, HybridVec2},
-    world::{World, tile::Tile},
+    modding::Registry,
+    world::{
+        World,
+        tile::{Tile, TileDef},
+    },
 };
 
 #[derive(Debug)]
@@ -168,18 +172,7 @@ impl Aabb {
         delta: Vec2,
         padding: Vec2,
     ) -> Option<SweepContact> {
-        let inv_delta = Vec2::new(
-            if delta.x != 0.0 {
-                1.0 / delta.x
-            } else {
-                f32::INFINITY
-            },
-            if delta.y != 0.0 {
-                1.0 / delta.y
-            } else {
-                f32::INFINITY
-            },
-        );
+        let inv_delta = 1.0 / delta;
 
         let min = self.center - (self.half_extents + padding);
         let max = self.center + (self.half_extents + padding);
@@ -213,16 +206,13 @@ impl Aabb {
     }
 
     pub fn sweep_aabb(&self, other: &Aabb, delta: Vec2) -> Option<SweepContact> {
-        if delta.length_squared() == 0.0 {
-            return self.overlap_aabb(other).map(|c| SweepContact {
-                point: c.point,
-                normal: c.mtv.normalize_or_zero(),
-                time: 0.0,
-            });
-        }
-
         self.sweep_point(other.center, delta, other.half_extents)
     }
+}
+
+pub fn get_tile(world: &World, x: Hybrid, y: Hybrid) -> Option<&Tile> {
+    let pos = I64Vec2::new(x.round().into(), y.round().into());
+    world.get_tile(pos)
 }
 
 #[derive(Debug)]
@@ -239,9 +229,12 @@ pub struct SweepContact {
     pub time: f32,
 }
 
-pub fn get_tile(world: &World, x: Hybrid, y: Hybrid) -> Option<&Tile> {
-    let pos = I64Vec2::new(x.round().into(), y.round().into());
-    world.get_tile(pos)
+#[derive(Debug)]
+pub struct WorldSweepContact<'w> {
+    pub tile: &'w Tile,
+    pub point: HybridVec2,
+    pub normal: Vec2,
+    pub time: f32,
 }
 
 #[derive(Debug, Default)]
@@ -308,6 +301,13 @@ impl<'w> OverlappingTiles<'w> {
         ]
         .into_iter()
         .flatten()
+    }
+
+    pub fn iter_defs<'a>(
+        &self,
+        registry: &'a Registry<TileDef>,
+    ) -> impl Iterator<Item = &'a TileDef> {
+        self.iter().flat_map(|t| registry.get(t.id))
     }
 }
 

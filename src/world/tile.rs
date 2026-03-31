@@ -8,6 +8,7 @@ use crate::modding::{DefPath, Definition, DefinitionLoadError, Id, ModInfo};
 pub struct TileDef {
     pub sprite_path: String,
     pub friction: f32,
+    pub restitution: f32,
 }
 
 impl Definition for TileDef {
@@ -22,6 +23,7 @@ impl Definition for TileDef {
             path: DefPath,
             sprite_path: String,
             friction: f32,
+            restitution: f32,
         }
 
         let string = fs::read_to_string(&path)?;
@@ -34,6 +36,7 @@ impl Definition for TileDef {
             TileDef {
                 sprite_path: raw.sprite_path,
                 friction: raw.friction,
+                restitution: raw.restitution,
             },
         ))
     }

@@ -2,4 +2,5 @@
     path: "ice",
     sprite_path: "mods://base/assets/ice.png",
     friction: 0.005,
+    restitution: 0.04
 )

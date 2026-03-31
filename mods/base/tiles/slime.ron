@@ -1,0 +1,6 @@
+(
+    path: "slime",
+    sprite_path: "mods://base/assets/slime.png",
+    friction: 0.4,
+    restitution: 0.7,
+)

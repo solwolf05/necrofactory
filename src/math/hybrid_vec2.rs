@@ -66,6 +66,10 @@ impl HybridVec2 {
         self.x.max(self.y)
     }
 
+    pub fn min_element(self) -> Hybrid {
+        self.x.min(self.y)
+    }
+
     pub fn chunk(&self) -> IVec2 {
         IVec2::new(self.x.chunk, self.y.chunk)
     }
@@ -136,6 +140,20 @@ impl HybridVec2 {
 
     pub fn distance_squared(self, other: Self) -> f32 {
         (self - other).length_squared()
+    }
+
+    pub fn min(self, other: Self) -> Self {
+        Self {
+            x: self.x.min(other.x),
+            y: self.y.min(other.y),
+        }
+    }
+
+    pub fn max(self, other: Self) -> Self {
+        Self {
+            x: self.x.max(other.x),
+            y: self.y.max(other.y),
+        }
     }
 }
 

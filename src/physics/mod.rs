@@ -3,11 +3,11 @@ use bevy::prelude::*;
 use crate::{
     GameState,
     modding::Registry,
-    physics::collision::Aabb,
+    physics::collision::{Aabb, OverlappingTiles},
     world::{World, WorldTransform, tile::TileDef},
 };
 
-mod collision;
+pub mod collision;
 
 pub const GRAVITY: f32 = 9.8;
 
@@ -109,59 +109,70 @@ fn solve_tile_collisions(
 ) {
     let dt = time.delta_secs();
     let world = world.into_inner();
+    let registry = registry.into_inner();
 
     for (entity, mut transform, mut vel, collider, restitution) in &mut query {
         let dt_vel = vel.0 * dt;
 
-        let steps = dt_vel.abs().ceil();
+        let steps = Vec2::splat(1.0);
         let step_vel = dt_vel / steps;
 
-        for _ in 0..steps.x as u32 {
-            // x axis
-
-            let mut new_pos = transform.translation;
-            new_pos.x += step_vel.x;
-            let tiles = Aabb::new(new_pos, collider.0).overlapping_tiles(world);
-            if tiles.is_some() {
-                let friction: f32 = tiles
-                    .iter()
-                    .flat_map(|t| registry.get(t.id))
-                    .map(|t| t.friction)
-                    .sum::<f32>()
-                    * 0.5;
-
-                vel.0.x *= -restitution.0;
-                vel.0.y *= 1.0 - friction;
-                break;
-            } else {
-                transform.translation.x = new_pos.x;
-            }
-        }
-
+        // y axis
         for _ in 0..steps.y as u32 {
-            // y axis
-
             let mut new_pos = transform.translation;
             new_pos.y += step_vel.y;
             let tiles = Aabb::new(new_pos, collider.0).overlapping_tiles(world);
             if tiles.is_some() {
-                let friction: f32 = tiles
-                    .iter()
-                    .flat_map(|t| registry.get(t.id))
-                    .map(|t| t.friction)
-                    .sum::<f32>()
-                    * 0.5;
+                let friction = tile_friction(&tiles, registry);
+                let restitution = tile_restitution(&tiles, registry, restitution.0);
 
-                vel.0.y *= -restitution.0;
+                vel.0.y *= -restitution;
                 vel.0.x *= 1.0 - friction;
+
                 if tiles.is_bottom_some() {
                     commands.entity(entity).insert(Grounded);
                 }
+
                 break;
             } else {
                 transform.translation.y = new_pos.y;
                 commands.entity(entity).try_remove::<Grounded>();
             }
         }
+
+        // x axis
+        for _ in 0..steps.x as u32 {
+            let mut new_pos = transform.translation;
+            new_pos.x += step_vel.x;
+            let tiles = Aabb::new(new_pos, collider.0).overlapping_tiles(world);
+            if tiles.is_some() {
+                let friction = tile_friction(&tiles, registry);
+                let restitution = tile_restitution(&tiles, registry, restitution.0);
+
+                vel.0.x *= -restitution;
+                vel.0.y *= 1.0 - friction;
+
+                break;
+            } else {
+                transform.translation.x = new_pos.x;
+            }
+        }
     }
+}
+
+fn tile_friction(tiles: &OverlappingTiles, registry: &Registry<TileDef>) -> f32 {
+    tiles
+        .iter_defs(registry)
+        .map(|t| t.friction)
+        .max_by(|a, b| a.total_cmp(b))
+        .unwrap_or_default()
+}
+
+fn tile_restitution(tiles: &OverlappingTiles, registry: &Registry<TileDef>, other: f32) -> f32 {
+    let tile_restitution: f32 = tiles
+        .iter_defs(registry)
+        .map(|t| t.restitution)
+        .max_by(|a, b| a.total_cmp(b))
+        .unwrap_or(1.0);
+    (other * tile_restitution).sqrt()
 }

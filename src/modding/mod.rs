@@ -270,8 +270,8 @@ impl ModRegistry {
     ) -> impl Iterator<Item = (Id<ModInfo>, &DefPathSegment, &ModInfo)> {
         self.mods
             .iter()
-            .filter(|(_, t)| t.enabled())
             .enumerate()
+            .filter(|(_, (_, t))| t.enabled())
             .map(|(i, (s, t))| (Id::from_index(i), s, t))
     }
 
@@ -280,8 +280,8 @@ impl ModRegistry {
     ) -> impl Iterator<Item = (Id<ModInfo>, &DefPathSegment, &ModInfo)> {
         self.mods
             .iter()
-            .filter(|(_, t)| !t.enabled())
             .enumerate()
+            .filter(|(_, (_, t))| !t.enabled())
             .map(|(i, (s, t))| (Id::from_index(i), s, t))
     }
 }

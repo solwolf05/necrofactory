@@ -2,4 +2,5 @@
     path: "grass",
     sprite_path: "mods://base/assets/grass.png",
     friction: 0.2,
+    restitution: 0.025,
 )
