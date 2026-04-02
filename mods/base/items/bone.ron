@@ -1,0 +1,5 @@
+(
+    path: "bone",
+    name: "Bone",
+    sprite: "mods://base/assets/bone.png",
+)

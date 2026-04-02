@@ -13,9 +13,13 @@ use necrofactory::{
         DebugPlugin, coord::CoordinateDebugPlugin, jetpack::JetPackDebugPlugin,
         physics::PhysicsDebugPlugin, probe::ProbePlugin,
     },
+    factory::{FactoryPlugin, MachineDef, RecipeDef, RecipeKindDef},
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState, WorldCursor},
-    modding::{DefinitionPlugin, Id, ModAssetSourcePlugin, ModPlugin, Registry},
+    item::ItemDef,
+    modding::{
+        DefinitionPlugin, Id, ModAssetSourcePlugin, ModPlugin, Registry, ResolveDefinitionPlugin,
+    },
     physics::{Collider, Drag, Mass, PhysicsPlugin, Restitution, Rigidbody},
     player::{FuelTank, JetPackPlugin, Jetpack, JetpackControl, Player},
     world::{
@@ -50,6 +54,10 @@ fn main() -> AppExit {
             ModPlugin,
             DefinitionPlugin::<TileDef>::default(),
             DefinitionPlugin::<InputAction>::default(),
+            DefinitionPlugin::<ItemDef>::default(),
+            ResolveDefinitionPlugin::<RecipeDef>::default(),
+            DefinitionPlugin::<RecipeKindDef>::default(),
+            ResolveDefinitionPlugin::<MachineDef>::default(),
         ))
         .add_plugins((
             WorldPlugin,
@@ -58,6 +66,7 @@ fn main() -> AppExit {
             InputPlugin,
             PhysicsPlugin,
             JetPackPlugin,
+            FactoryPlugin,
         ))
         // .add_plugins((EguiPlugin::default(), WorldInspectorPlugin::default()))
         .add_plugins((

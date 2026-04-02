@@ -1,0 +1,11 @@
+(
+    path: "bone_to_bone",
+    kind: "base::crafting",
+    inputs: [
+        ("base::bone", 1),
+    ],
+    outputs: [
+        ("base::bone", 2),
+    ],
+    time: 1.0,
+)

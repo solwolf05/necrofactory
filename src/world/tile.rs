@@ -27,7 +27,7 @@ impl Definition for TileDef {
         }
 
         let string = fs::read_to_string(&path)?;
-        let raw: RawTileDef = ron::from_str(&string)?;
+        let raw: RawTileDef = ron::from_str(&string).map_err(|e| (e, path))?;
 
         let def_path = mod_info.id().join(raw.path);
 

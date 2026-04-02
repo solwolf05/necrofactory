@@ -16,7 +16,6 @@ use crate::{
 pub use transform::{BaseChunk, RebaseSet, WorldTransform};
 
 pub mod chunk;
-pub mod machine;
 mod position;
 pub mod tile;
 mod transform;

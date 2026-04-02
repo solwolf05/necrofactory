@@ -1,11 +1,14 @@
 #![feature(duration_millis_float)]
+#![feature(option_reference_flattening)]
 
 use bevy::state::state::States;
 
 pub mod combat;
 pub mod debug;
+pub mod factory;
 pub mod graphics;
 pub mod input;
+pub mod item;
 pub mod math;
 pub mod modding;
 pub mod physics;

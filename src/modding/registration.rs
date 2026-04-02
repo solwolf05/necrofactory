@@ -1,7 +1,8 @@
 use std::{
+    any::type_name,
     collections::VecDeque,
     error::Error,
-    fmt::Display,
+    fmt::{Debug, Display},
     fs,
     marker::PhantomData,
     path::{Path, PathBuf},
@@ -168,21 +169,27 @@ pub fn check_loaded(
     active: Res<TotalActive>,
 ) {
     if pending.0 == 0 && active.0 == 0 {
-        next_state.set(ModLoadState::LoadAssets);
+        next_state.set(ModLoadState::Resolve);
     }
+}
+
+pub fn check<D: Definition + Debug>(registry: Res<Registry<D>>) {
+    info!("{}\n{:?}", type_name::<D>(), *registry);
 }
 
 #[derive(Debug)]
 pub enum DefinitionLoadError {
     Io(std::io::Error),
-    Parse(ron::error::SpannedError),
+    Parse(ron::error::SpannedError, PathBuf),
 }
 
 impl Display for DefinitionLoadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DefinitionLoadError::Io(error) => error.fmt(f),
-            DefinitionLoadError::Parse(error) => write!(f, "{}", error),
+            DefinitionLoadError::Io(error) => Display::fmt(error, f),
+            DefinitionLoadError::Parse(error, path) => {
+                write!(f, "{}: {}", path.display(), error)
+            }
         }
     }
 }
@@ -195,8 +202,8 @@ impl From<std::io::Error> for DefinitionLoadError {
     }
 }
 
-impl From<ron::error::SpannedError> for DefinitionLoadError {
-    fn from(err: ron::error::SpannedError) -> Self {
-        DefinitionLoadError::Parse(err)
+impl From<(ron::error::SpannedError, PathBuf)> for DefinitionLoadError {
+    fn from((err, path): (ron::error::SpannedError, PathBuf)) -> Self {
+        DefinitionLoadError::Parse(err, path)
     }
 }

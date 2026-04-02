@@ -1,0 +1,4 @@
+(
+    path: "crafter",
+    recipe_kinds: [ "crafting" ],
+)

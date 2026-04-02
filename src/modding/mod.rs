@@ -12,22 +12,22 @@ use serde::Deserialize;
 
 use crate::{
     GameState,
-    input::InputAction,
     modding::{
         asset_loading::begin_asset_loading, discovery::discover_mods, finalization::finalize,
         validation::validate_mods,
     },
-    world::tile::TileDef,
 };
 
 pub use asset_loading::TileSprites;
 pub use registration::DefinitionLoadError;
+pub use resolution::{ResolutionError, Resolve, ResolvedRegistry, resolve};
 pub use types::*;
 
 mod asset_loading;
 mod discovery;
 mod finalization;
 mod registration;
+mod resolution;
 mod types;
 mod validation;
 
@@ -55,6 +55,11 @@ impl Plugin for ModPlugin {
             )
             .add_systems(OnExit(ModLoadState::Register), registration::cleanup);
 
+        app.add_systems(
+            Update,
+            resolution::cleanup.run_if(in_state(ModLoadState::Resolve)),
+        );
+
         app.add_systems(OnEnter(ModLoadState::LoadAssets), begin_asset_loading)
             .add_systems(
                 Update,
@@ -62,8 +67,7 @@ impl Plugin for ModPlugin {
             )
             .add_systems(OnExit(ModLoadState::LoadAssets), asset_loading::cleanup);
 
-        app.add_systems(OnEnter(ModLoadState::Finalize), finalize)
-            .add_systems(OnEnter(ModLoadState::Finalize), check_registries);
+        app.add_systems(OnEnter(ModLoadState::Finalize), finalize);
     }
 }
 
@@ -78,9 +82,9 @@ impl Plugin for ModAssetSourcePlugin {
     }
 }
 
-pub struct DefinitionPlugin<D: Definition>(PhantomData<D>);
+pub struct DefinitionPlugin<D: Definition + Debug>(PhantomData<D>);
 
-impl<D: Definition> Plugin for DefinitionPlugin<D> {
+impl<D: Definition + Debug> Plugin for DefinitionPlugin<D> {
     fn build(&self, app: &mut App) {
         app.init_resource::<Registry<D>>()
             .add_systems(
@@ -95,10 +99,30 @@ impl<D: Definition> Plugin for DefinitionPlugin<D> {
                 (registration::spawn::<D>, registration::poll::<D>)
                     .run_if(in_state(ModLoadState::Register)),
             );
+        #[cfg(debug_assertions)]
+        app.add_systems(OnExit(ModLoadState::Register), registration::check::<D>);
     }
 }
 
-impl<D: Definition> Default for DefinitionPlugin<D> {
+impl<D: Definition + Debug> Default for DefinitionPlugin<D> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+pub struct ResolveDefinitionPlugin<D: Definition + Debug>(PhantomData<D>);
+
+impl<D: Resolve + Debug> Plugin for ResolveDefinitionPlugin<D> {
+    fn build(&self, app: &mut App) {
+        app.add_plugins(DefinitionPlugin::<D>::default());
+        app.init_resource::<ResolvedRegistry<D>>().add_systems(
+            OnEnter(ModLoadState::Resolve),
+            resolution::resolve_registry::<D>,
+        );
+    }
+}
+
+impl<D: Definition + Debug> Default for ResolveDefinitionPlugin<D> {
     fn default() -> Self {
         Self(Default::default())
     }
@@ -111,6 +135,7 @@ pub enum ModLoadState {
     Discover,
     Validate,
     Register,
+    Resolve,
     LoadAssets,
     Finalize,
 }
@@ -126,11 +151,6 @@ fn mods_path() -> PathBuf {
     }
 
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mods")
-}
-
-fn check_registries(inputs: Res<Registry<InputAction>>, tiles: Res<Registry<TileDef>>) {
-    info!("Inputs:\n{:?}", *inputs);
-    info!("Tiles:\n{:?}", *tiles);
 }
 
 fn check_mods(mods: Res<ModRegistry>) {

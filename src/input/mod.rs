@@ -24,7 +24,6 @@ impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<InputState>()
             .init_resource::<InputBindings>()
-            .init_resource::<Registry<InputAction>>()
             .init_resource::<WorldCursor>()
             .add_systems(OnEnter(ModLoadState::Finalize), setup_input_map)
             .add_systems(
@@ -231,10 +230,6 @@ pub struct InputBinding {
 }
 
 impl InputBinding {
-    pub const SHIFT: u8 = 0b001;
-    pub const CONTROL: u8 = 0b010;
-    pub const ALT: u8 = 0b100;
-
     pub fn from_kind(input_type: InputBindingKind) -> Self {
         Self {
             kind: input_type,
@@ -295,28 +290,20 @@ pub enum InputBindingKind {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize)]
 pub struct InputAction {
-    pub name: String,
     pub default: InputBinding,
 }
 
 impl InputAction {
-    pub fn new(name: &str, default: InputBinding) -> Self {
-        Self {
-            name: name.to_string(),
-            default,
-        }
+    pub fn new(default: InputBinding) -> Self {
+        Self { default }
     }
 
-    pub fn key(name: &str, default: KeyCode) -> Self {
-        Self::new(name, InputBinding::key(default))
+    pub fn key(default: KeyCode) -> Self {
+        Self::new(InputBinding::key(default))
     }
 
-    pub fn mouse(name: &str, default: MouseButton) -> Self {
-        Self::new(name, InputBinding::mouse(default))
-    }
-
-    pub(crate) fn nameless(default: InputBinding) -> Self {
-        Self::new("", default)
+    pub fn mouse(default: MouseButton) -> Self {
+        Self::new(InputBinding::mouse(default))
     }
 }
 
@@ -330,19 +317,17 @@ impl Definition for InputAction {
         #[derive(Deserialize)]
         struct RawInputAction {
             path: DefPath,
-            name: String,
             default: InputBinding,
         }
 
         let string = fs::read_to_string(&path)?;
-        let raw: RawInputAction = ron::from_str(&string)?;
+        let raw: RawInputAction = ron::from_str(&string).map_err(|e| (e, path))?;
 
         let def_path = mod_info.id().join(raw.path);
 
         Ok((
             def_path,
             InputAction {
-                name: raw.name,
                 default: raw.default,
             },
         ))
@@ -351,6 +336,6 @@ impl Definition for InputAction {
 
 impl From<InputBinding> for InputAction {
     fn from(value: InputBinding) -> Self {
-        Self::nameless(value)
+        Self::new(value)
     }
 }

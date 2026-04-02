@@ -1,6 +1,7 @@
 //! Register definitions (defs)
 
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
@@ -28,8 +29,7 @@ impl<T> Registry<T> {
 
     /// Registers a definition with the given path and returns its ID.
     /// If the definition already exists, it is replaced and the existing ID is returned.
-    pub fn register(&mut self, path: impl TryInto<DefPath>, def: T) -> Option<Id<T>> {
-        let path = path.try_into().ok()?;
+    pub fn register(&mut self, path: DefPath, def: T) -> Option<Id<T>> {
         if let Some(id) = self.lookup.get(&path).copied() {
             self.definitions[id.index()].1 = def;
             return Some(id);
@@ -56,9 +56,8 @@ impl<T> Registry<T> {
     }
 
     /// Looks up the id of the definition associated with the given path.
-    pub fn lookup(&self, path: impl TryInto<DefPath>) -> Option<Id<T>> {
-        let path = path.try_into().ok()?;
-        self.lookup.get(&path).copied()
+    pub fn lookup(&self, path: &str) -> Option<Id<T>> {
+        self.lookup.get(path).copied()
     }
 
     /// Resolves the path of the definition associated with the given ID.
@@ -72,7 +71,7 @@ impl<T> Registry<T> {
     }
 
     /// Retrieves the definition associated with the given path.
-    pub fn get_by_path(&self, path: impl TryInto<DefPath>) -> Option<&T> {
+    pub fn get_by_path(&self, path: &str) -> Option<&T> {
         self.lookup(path).and_then(|id| self.get(id))
     }
 
@@ -80,11 +79,8 @@ impl<T> Registry<T> {
         self.definitions.len() > id.index()
     }
 
-    pub fn contains_path(&self, path: impl TryInto<DefPath>) -> bool {
-        let Ok(path) = path.try_into() else {
-            return false;
-        };
-        self.lookup.contains_key(&path)
+    pub fn contains_path(&self, path: &str) -> bool {
+        self.lookup.contains_key(path)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&DefPath, &T)> {
@@ -150,7 +146,7 @@ impl<T> Id<T> {
 
 impl<T> Debug for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "id({})", self.0)
+        write!(f, "Id({})", self.0)
     }
 }
 
@@ -343,6 +339,12 @@ impl FromStr for DefPath {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         Self::new(s).ok_or(())
+    }
+}
+
+impl Borrow<str> for DefPath {
+    fn borrow(&self) -> &str {
+        &self.0
     }
 }
 
