@@ -130,8 +130,8 @@ pub fn spawn<D: Definition>(
     while active.0.len() < MAX_CONCURRENT_IO
         && let Some((mod_id, path)) = pending.0.pop_front()
     {
-        let mod_info = mods.get(mod_id).unwrap().clone();
-        active.0.push(pool.spawn(D::load(mod_info, path)));
+        let mod_info = mods.get(mod_id).unwrap().id();
+        active.0.push(pool.spawn(D::load(mod_info.clone(), path)));
 
         total_pending.0 -= 1;
         total_active.0 += 1;

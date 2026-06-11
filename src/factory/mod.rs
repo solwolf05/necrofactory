@@ -6,15 +6,15 @@ use serde::Deserialize;
 use crate::{
     item::ItemDef,
     modding::{
-        DefPath, Definition, DefinitionLoadError, Id, ModInfo, Registry, ResolutionError, Resolve,
-        resolve,
+        DefPath, DefPathSegment, Definition, DefinitionLoadError, Id, Registry, ResolutionError,
+        Resolve, resolve,
     },
 };
 
 pub struct FactoryPlugin;
 
 impl Plugin for FactoryPlugin {
-    fn build(&self, app: &mut App) {}
+    fn build(&self, _app: &mut App) {}
 }
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl Definition for MachineDef {
     const DIR: &'static str = "machines";
 
     async fn load(
-        mod_info: ModInfo,
+        mod_id: DefPathSegment,
         path: PathBuf,
     ) -> Result<(DefPath, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
@@ -38,7 +38,7 @@ impl Definition for MachineDef {
         let string = fs::read_to_string(&path)?;
         let raw: RawMachineDef = ron::from_str(&string).map_err(|e| (e, path))?;
 
-        let def_path = mod_info.id().join(raw.path);
+        let def_path = mod_id.join(raw.path);
 
         Ok((
             def_path,
@@ -88,7 +88,7 @@ impl Definition for RecipeDef {
     const DIR: &'static str = "recipes";
 
     async fn load(
-        mod_info: ModInfo,
+        mod_id: DefPathSegment,
         path: PathBuf,
     ) -> Result<(DefPath, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
@@ -103,7 +103,7 @@ impl Definition for RecipeDef {
         let string = fs::read_to_string(&path)?;
         let raw: RawRecipeDef = ron::from_str(&string).map_err(|e| (e, path))?;
 
-        let def_path = mod_info.id().join(raw.path);
+        let def_path = mod_id.join(raw.path);
 
         Ok((
             def_path,
@@ -162,7 +162,7 @@ impl Definition for RecipeKindDef {
     const DIR: &'static str = "recipe_kinds";
 
     async fn load(
-        mod_info: ModInfo,
+        mod_id: DefPathSegment,
         path: PathBuf,
     ) -> Result<(DefPath, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
@@ -173,7 +173,7 @@ impl Definition for RecipeKindDef {
         let string = fs::read_to_string(&path)?;
         let raw: RawRecipeKindDef = ron::from_str(&string).map_err(|e| (e, path))?;
 
-        let def_path = mod_info.id().join(raw.path);
+        let def_path = mod_id.join(raw.path);
 
         Ok((def_path, RecipeKindDef {}))
     }

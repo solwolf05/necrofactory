@@ -3344,6 +3344,7 @@ dependencies = [
  "ron",
  "semver",
  "serde",
+ "smallvec",
  "toml",
  "tracing",
 ]

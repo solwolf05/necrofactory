@@ -1,0 +1,6 @@
+(
+    path: "bounce",
+    sprite_path: "mods://base/assets/bounce.png",
+    friction: 0.4,
+    restitution: 0.9,
+)

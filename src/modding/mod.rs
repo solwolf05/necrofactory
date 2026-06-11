@@ -458,7 +458,7 @@ pub trait Definition: Sized + Send + Sync + 'static {
     const DIR: &'static str;
 
     fn load(
-        mod_info: ModInfo,
+        mod_id: DefPathSegment,
         path: PathBuf,
     ) -> impl Future<Output = Result<(DefPath, Self), DefinitionLoadError>> + Send;
 }

@@ -1,4 +1,5 @@
-use bevy::math::{I64Vec2, Vec2};
+use bevy::{math::I64Vec2, prelude::*};
+use smallvec::SmallVec;
 
 use crate::{
     math::{Hybrid, HybridVec2},
@@ -8,6 +9,21 @@ use crate::{
         tile::{Tile, TileDef},
     },
 };
+
+#[derive(Debug, Message)]
+pub enum CollisionEvent {
+    Rigidbody { entity: Entity, other: Entity },
+    World { entity: Entity, tile: I64Vec2 },
+}
+
+impl CollisionEvent {
+    pub fn entity(&self) -> Entity {
+        match self {
+            CollisionEvent::Rigidbody { entity, .. } => *entity,
+            CollisionEvent::World { entity, .. } => *entity,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Aabb {
@@ -100,70 +116,18 @@ impl Aabb {
         false
     }
 
-    pub fn overlapping_tiles<'w>(&self, world: &'w World) -> OverlappingTiles<'w> {
-        let min = self.center - self.half_extents;
-        let max = self.center + self.half_extents - 0.0001;
+    pub fn overlapping_tiles<'w>(&self, world: &'w World) -> SmallVec<[(&'w Tile, I64Vec2); 4]> {
+        let min = I64Vec2::from((self.center - self.half_extents).round());
+        let max = I64Vec2::from((self.center + self.half_extents - 0.0001).round());
 
-        let mut tiles = OverlappingTiles::default();
-
-        tiles.bottom_left = get_tile(world, min.x, min.y);
-        tiles.bottom_right = get_tile(world, max.x, min.y);
-        tiles.top_left = get_tile(world, min.x, max.y);
-        tiles.top_right = get_tile(world, max.x, max.y);
-
-        tiles
-    }
-
-    pub fn overlapping_tiles_bottom<'w>(
-        &self,
-        world: &'w World,
-    ) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        let min = self.center - self.half_extents;
-        let max = self.center + self.half_extents - 0.0001;
-
-        let bottom_left = get_tile(world, min.x, min.y);
-        let bottom_right = get_tile(world, max.x, min.y);
-
-        (bottom_left, bottom_right)
-    }
-
-    pub fn overlapping_tiles_top<'w>(
-        &self,
-        world: &'w World,
-    ) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        let min = self.center - self.half_extents;
-        let max = self.center + self.half_extents - 0.0001;
-
-        let top_left = get_tile(world, min.x, max.y);
-        let top_right = get_tile(world, max.x, max.y);
-
-        (top_left, top_right)
-    }
-
-    pub fn overlapping_tiles_left<'w>(
-        &self,
-        world: &'w World,
-    ) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        let min = self.center - self.half_extents;
-        let max = self.center + self.half_extents - 0.0001;
-
-        let bottom_left = get_tile(world, min.x, min.y);
-        let top_left = get_tile(world, min.x, max.y);
-
-        (bottom_left, top_left)
-    }
-
-    pub fn overlapping_tiles_right<'w>(
-        &self,
-        world: &'w World,
-    ) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        let min = self.center - self.half_extents;
-        let max = self.center + self.half_extents - 0.0001;
-
-        let bottom_right = get_tile(world, max.x, min.y);
-        let top_right = get_tile(world, max.x, max.y);
-
-        (bottom_right, top_right)
+        (min.x..=max.x)
+            .flat_map(move |x| {
+                (min.y..=max.y).flat_map(move |y| {
+                    let pos = I64Vec2::new(x, y);
+                    world.get_tile(pos).map(|tile| (tile, pos))
+                })
+            })
+            .collect::<SmallVec<_>>()
     }
 
     pub fn sweep_point(
@@ -229,140 +193,22 @@ pub struct SweepContact {
     pub time: f32,
 }
 
-#[derive(Debug)]
-pub struct WorldSweepContact<'w> {
-    pub tile: &'w Tile,
-    pub point: HybridVec2,
-    pub normal: Vec2,
-    pub time: f32,
-}
-
 #[derive(Debug, Default)]
-pub struct OverlappingTiles<'w> {
-    pub bottom_left: Option<&'w Tile>,
-    pub bottom_right: Option<&'w Tile>,
-    pub top_left: Option<&'w Tile>,
-    pub top_right: Option<&'w Tile>,
-}
+pub struct OverlappingTiles<'w>(Vec<(&'w Tile, I64Vec2)>);
 
 impl<'w> OverlappingTiles<'w> {
-    pub fn is_some(&self) -> bool {
-        self.top_left.is_some()
-            || self.top_right.is_some()
-            || self.bottom_left.is_some()
-            || self.bottom_right.is_some()
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
-    pub fn is_none(&self) -> bool {
-        self.top_left.is_none()
-            && self.top_right.is_none()
-            && self.bottom_left.is_none()
-            && self.bottom_right.is_none()
-    }
-
-    pub fn is_bottom_some(&self) -> bool {
-        self.bottom_left.is_some() || self.bottom_right.is_some()
-    }
-
-    pub fn is_left_some(&self) -> bool {
-        self.bottom_left.is_some() || self.top_left.is_some()
-    }
-
-    pub fn is_top_some(&self) -> bool {
-        self.top_left.is_some() || self.top_right.is_some()
-    }
-
-    pub fn is_right_some(&self) -> bool {
-        self.bottom_right.is_some() || self.bottom_right.is_some()
-    }
-
-    pub fn bottom(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        (self.bottom_left, self.bottom_right)
-    }
-
-    pub fn top(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        (self.top_left, self.top_right)
-    }
-
-    pub fn left(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        (self.bottom_left, self.top_left)
-    }
-
-    pub fn right(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        (self.bottom_right, self.top_right)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &'w Tile> {
-        [
-            self.bottom_left,
-            self.bottom_right,
-            self.top_left,
-            self.top_right,
-        ]
-        .into_iter()
-        .flatten()
+    pub fn iter(&self) -> impl Iterator<Item = (&'w Tile, I64Vec2)> {
+        self.0.iter().map(|(tile, pos)| (*tile, *pos))
     }
 
     pub fn iter_defs<'a>(
         &self,
         registry: &'a Registry<TileDef>,
     ) -> impl Iterator<Item = &'a TileDef> {
-        self.iter().flat_map(|t| registry.get(t.id))
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct IsTilesOverlap<'w> {
-    pub bottom_left: Option<&'w Tile>,
-    pub bottom_right: Option<&'w Tile>,
-    pub top_left: Option<&'w Tile>,
-    pub top_right: Option<&'w Tile>,
-}
-
-impl<'w> IsTilesOverlap<'w> {
-    pub fn is_some(&self) -> bool {
-        self.top_left.is_some()
-            || self.top_right.is_some()
-            || self.bottom_left.is_some()
-            || self.bottom_right.is_some()
-    }
-
-    pub fn is_none(&self) -> bool {
-        self.top_left.is_none()
-            && self.top_right.is_none()
-            && self.bottom_left.is_none()
-            && self.bottom_right.is_none()
-    }
-
-    pub fn is_bottom_some(&self) -> bool {
-        self.bottom_left.is_some() || self.bottom_right.is_some()
-    }
-
-    pub fn is_left_some(&self) -> bool {
-        self.bottom_left.is_some() || self.top_left.is_some()
-    }
-
-    pub fn is_top_some(&self) -> bool {
-        self.top_left.is_some() || self.top_right.is_some()
-    }
-
-    pub fn is_right_some(&self) -> bool {
-        self.bottom_right.is_some() || self.bottom_right.is_some()
-    }
-
-    pub fn bottom(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        (self.bottom_left, self.bottom_right)
-    }
-
-    pub fn top(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        (self.top_left, self.top_right)
-    }
-
-    pub fn left(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        (self.bottom_left, self.top_left)
-    }
-
-    pub fn right(&self) -> (Option<&'w Tile>, Option<&'w Tile>) {
-        (self.bottom_right, self.top_right)
+        self.iter().flat_map(|(t, _)| registry.get(t.id))
     }
 }

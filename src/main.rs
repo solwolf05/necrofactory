@@ -119,7 +119,26 @@ fn setup(mut commands: Commands) {
         Sprite::from_color(Color::hsv(0.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
         Rigidbody,
         Mass(1.0),
-        Collider(Vec2::splat(0.99)),
+        Collider(Vec2::splat(1.0)),
+        Drag(0.002),
+        Restitution(0.5),
+        Jetpack {
+            fuel_use_rate: 20.0,
+            force: 20.0,
+        },
+        FuelTank {
+            fuel: 100.0,
+            max_fuel: 100.0,
+            fuel_regen_rate: 100.0,
+        },
+    ));
+
+    commands.spawn((
+        WorldTransform::from_translation(Vec2::new(0.0, 16.0).into()),
+        Sprite::from_color(Color::hsv(120.0, 1.0, 0.4), Vec2 { x: 16.0, y: 16.0 }),
+        Rigidbody,
+        Mass(1.0),
+        Collider(Vec2::splat(1.0)),
         Drag(0.002),
         Restitution(0.5),
         Jetpack {

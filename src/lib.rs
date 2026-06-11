@@ -1,5 +1,6 @@
 #![feature(duration_millis_float)]
 #![feature(option_reference_flattening)]
+#![feature(iter_map_windows)]
 
 use bevy::state::state::States;
 

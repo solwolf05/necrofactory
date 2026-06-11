@@ -1,6 +1,6 @@
 use std::{fmt::Display, hash::Hash};
 
-use bevy::prelude::*;
+use bevy::{math::U8Vec2, prelude::*};
 
 use crate::world::tile::Tile;
 
@@ -97,5 +97,43 @@ impl From<TilePosition> for Vec2 {
         let x = value.x() as f32;
         let y = value.y() as f32;
         Vec2::new(x, y)
+    }
+}
+
+pub enum Quadtree {
+    Some {
+        top_left: Box<Quadtree>,
+        top_right: Box<Quadtree>,
+        bottom_left: Box<Quadtree>,
+        bottom_right: Box<Quadtree>,
+    },
+    Leaf(Tile),
+    None,
+}
+
+impl Quadtree {
+    pub fn get(&self, pos: U8Vec2) -> Option<&Tile> {
+        let mut middle: u8 = 16 / 2;
+        let mut quad = self;
+        loop {
+            match quad {
+                Quadtree::Some {
+                    top_left,
+                    top_right,
+                    bottom_left,
+                    bottom_right,
+                } => {
+                    middle /= 2;
+                    match (pos.x >= middle, pos.y >= middle) {
+                        (false, false) => quad = bottom_left,
+                        (false, true) => quad = top_left,
+                        (true, false) => quad = bottom_right,
+                        (true, true) => quad = top_right,
+                    };
+                }
+                Quadtree::Leaf(tile) => return Some(tile),
+                Quadtree::None => return None,
+            }
+        }
     }
 }

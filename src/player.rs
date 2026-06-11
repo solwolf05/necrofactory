@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::physics::{Acceleration, GRAVITY, Grounded, Mass, Rigidbody, Velocity};
+use crate::physics::{Acceleration, GRAVITY, Grounded, Mass, PhysicsSet, Rigidbody, Velocity};
 
 #[derive(Component)]
 pub struct Player;
@@ -9,7 +9,10 @@ pub struct JetPackPlugin;
 
 impl Plugin for JetPackPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, (jetpack_system, jetpack_refuel_system));
+        app.add_systems(
+            FixedUpdate,
+            (jetpack_system, jetpack_refuel_system).before(PhysicsSet),
+        );
     }
 }
 
