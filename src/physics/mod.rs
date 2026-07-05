@@ -223,21 +223,22 @@ fn solve_entity_collisions(
     query: Query<(Entity, &WorldTransform, &Collider)>,
     mut collisions: MessageWriter<CollisionEvent>,
 ) {
-    // collisions.write_batch(
-    //     query
-    //         .iter()
-    //         .map_windows(|[a, b]| {
-    //             (
-    //                 (a.0, Aabb::new(a.1.translation, a.2.0)),
-    //                 (b.0, Aabb::new(b.1.translation, b.2.0)),
-    //             )
-    //         })
-    //         .filter(|(a, b)| {
-    //             a.1.center.chunk() == b.1.center.chunk() && a.1.overlap_aabb(&b.1).is_some()
-    //         })
-    //         .map(|(a, b)| CollisionEvent::Rigidbody {
-    //             entity: a.0,
-    //             other: b.0,
-    //         }),
-    // );
+    collisions.write_batch(
+        query
+            .iter()
+            .map_windows(|[a, b]| {
+                (
+                    (a.0, Aabb::new(a.1.translation, a.2.0)),
+                    (b.0, Aabb::new(b.1.translation, b.2.0)),
+                )
+            })
+            .filter(|(a, b)| {
+                a.1.center.chunk().distance_squared(b.1.center.chunk()) <= 1
+                    && a.1.overlap_aabb(&b.1).is_some()
+            })
+            .map(|(a, b)| CollisionEvent::Rigidbody {
+                entity: a.0,
+                other: b.0,
+            }),
+    );
 }

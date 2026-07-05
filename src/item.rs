@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf};
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use crate::modding::{DefPath, DefPathSegment, Definition, DefinitionLoadError};
+use crate::modding::{DefPath, Definition, DefinitionLoadError};
 
 #[derive(Debug)]
 pub struct ItemDef {
@@ -14,10 +14,7 @@ pub struct ItemDef {
 impl Definition for ItemDef {
     const DIR: &'static str = "items";
 
-    async fn load(
-        mod_id: DefPathSegment,
-        path: PathBuf,
-    ) -> Result<(DefPath, Self), DefinitionLoadError> {
+    async fn load(mod_id: DefPath, path: PathBuf) -> Result<(DefPath, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
         struct RawItemDef {
             path: DefPath,

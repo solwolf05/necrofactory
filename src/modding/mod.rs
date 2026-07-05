@@ -1,7 +1,7 @@
+use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use std::{collections::HashMap, fs};
 
 use bevy::{
     asset::io::{AssetSourceBuilder, AssetSourceId, file::FileAssetReader},
@@ -10,13 +10,12 @@ use bevy::{
 
 use serde::Deserialize;
 
-use crate::{
-    GameState,
-    modding::{
-        asset_loading::begin_asset_loading, discovery::discover_mods, finalization::finalize,
-        validation::validate_mods,
-    },
-};
+use crate::GameState;
+
+use asset_loading::begin_asset_loading;
+use discovery::discover_mods;
+use finalization::finalize;
+use validation::validate_mods;
 
 pub use asset_loading::TileSprites;
 pub use registration::DefinitionLoadError;
@@ -30,8 +29,6 @@ mod registration;
 mod resolution;
 mod types;
 mod validation;
-
-pub use types::{DefPathSegment, Id, Registry};
 
 /// Loads mods at the start of the game and registers their types in the registry.
 pub struct ModPlugin;
@@ -167,52 +164,42 @@ fn check_mods(mods: Res<ModRegistry>) {
 
 #[derive(Default, Resource, Clone)]
 pub struct ModRegistry {
-    mods: Vec<(DefPathSegment, ModInfo)>,
-    lookup: HashMap<DefPathSegment, Id<ModInfo>>,
+    mods: Vec<(DefPath, ModInfo)>,
+    installed_lookup: HashMap<DefPath, Id<ModInfo>>,
+    enabled_lookup: HashMap<DefPath, Id<ModInfo>>,
     pub load_order: Vec<Id<ModInfo>>,
 }
 
 impl ModRegistry {
-    pub fn register(&mut self, segment: DefPathSegment, mod_info: ModInfo) -> Id<ModInfo> {
-        if let Some(id) = self.lookup.get(&segment).copied() {
+    pub fn register(&mut self, segment: DefPath, mod_info: ModInfo) -> Id<ModInfo> {
+        if let Some(id) = self.enabled_lookup.get(&segment).copied() {
             self.mods[id.index()].1 = mod_info;
             return id;
         }
 
         let id = Id::from_index(self.mods.len());
         self.mods.push((segment.clone(), mod_info));
-        self.lookup.insert(segment, id);
+        self.enabled_lookup.insert(segment, id);
 
         id
     }
 
-    pub fn enable(&mut self, id: Id<ModInfo>) {
-        if let Some(mod_info) = self.get_mut(id) {
-            mod_info.enable();
+    pub fn enable(&mut self, segment: &DefPath) {
+        if let Some(mod_info) = self.installed_lookup.remove(segment) {
+            self.enabled_lookup.insert(segment.clone(), mod_info);
         }
     }
 
-    pub fn enable_segment(&mut self, segment: &DefPathSegment) {
-        if let Some(mod_info) = self.get_by_segment_mut(segment) {
-            mod_info.enable();
-        }
-    }
-
-    pub fn disable(&mut self, id: Id<ModInfo>) {
-        if let Some(mod_info) = self.get_mut(id) {
-            mod_info.disable();
-        }
-    }
-
-    pub fn disable_segment(&mut self, segment: &DefPathSegment) {
-        if let Some(mod_info) = self.get_by_segment_mut(segment) {
-            mod_info.disable();
+    pub fn disable(&mut self, segment: &DefPath) {
+        if let Some(mod_info) = self.enabled_lookup.remove(segment) {
+            self.installed_lookup.insert(segment.clone(), mod_info);
         }
     }
 
     pub fn clear(&mut self) {
         self.mods.clear();
-        self.lookup.clear();
+        self.installed_lookup.clear();
+        self.enabled_lookup.clear();
         self.load_order.clear();
     }
 
@@ -220,19 +207,23 @@ impl ModRegistry {
         self.mods.len()
     }
 
+    pub fn len_installed(&self) -> usize {
+        self.installed_lookup.len()
+    }
+
     pub fn len_enabled(&self) -> usize {
-        self.mods.iter().filter(|(_, m)| m.enabled()).count()
+        self.enabled_lookup.len()
     }
 
-    pub fn len_disabled(&self) -> usize {
-        self.mods.iter().filter(|(_, m)| !m.enabled()).count()
+    pub fn lookup_installed(&self, segment: &DefPath) -> Option<Id<ModInfo>> {
+        self.installed_lookup.get(segment).copied()
     }
 
-    pub fn lookup(&self, segment: &DefPathSegment) -> Option<Id<ModInfo>> {
-        self.lookup.get(&segment).copied()
+    pub fn lookup_enabled(&self, segment: &DefPath) -> Option<Id<ModInfo>> {
+        self.enabled_lookup.get(segment).copied()
     }
 
-    pub fn resolve(&self, id: Id<ModInfo>) -> Option<&DefPathSegment> {
+    pub fn resolve(&self, id: Id<ModInfo>) -> Option<&DefPath> {
         self.mods.get(id.index()).map(|r| &r.0)
     }
 
@@ -240,69 +231,80 @@ impl ModRegistry {
         self.mods.get(id.index()).map(|r| &r.1)
     }
 
-    fn get_mut(&mut self, id: Id<ModInfo>) -> Option<&mut ModInfo> {
+    pub fn get_mut(&mut self, id: Id<ModInfo>) -> Option<&mut ModInfo> {
         self.mods.get_mut(id.index()).map(|r| &mut r.1)
     }
 
-    pub fn get_by_segment(&self, segment: &DefPathSegment) -> Option<&ModInfo> {
-        self.lookup(segment).and_then(|id| self.get(id))
+    pub fn get_installed_by_segment(&self, segment: &DefPath) -> Option<&ModInfo> {
+        self.lookup_installed(segment).and_then(|id| self.get(id))
     }
 
-    pub fn get_by_segment_mut(&mut self, segment: &DefPathSegment) -> Option<&mut ModInfo> {
-        self.lookup(segment).and_then(|id| self.get_mut(id))
+    pub fn get_installed_by_segment_mut(&mut self, segment: &DefPath) -> Option<&mut ModInfo> {
+        self.lookup_installed(segment)
+            .and_then(|id| self.get_mut(id))
+    }
+
+    pub fn get_enabled_by_segment(&self, segment: &DefPath) -> Option<&ModInfo> {
+        self.lookup_enabled(segment).and_then(|id| self.get(id))
+    }
+
+    pub fn get_enabled_by_segment_mut(&mut self, segment: &DefPath) -> Option<&mut ModInfo> {
+        self.lookup_enabled(segment).and_then(|id| self.get_mut(id))
     }
 
     pub fn contains(&self, id: Id<ModInfo>) -> bool {
         self.mods.len() > id.index()
     }
 
-    pub fn contains_path(&self, segment: &DefPathSegment) -> bool {
-        self.lookup.contains_key(segment)
+    pub fn installed_contains_path(&self, segment: &DefPath) -> bool {
+        self.installed_lookup.contains_key(segment)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&DefPathSegment, &ModInfo)> {
+    pub fn enabled_contains_path(&self, segment: &DefPath) -> bool {
+        self.enabled_lookup.contains_key(segment)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&DefPath, &ModInfo)> {
         self.mods.iter().map(|(s, t)| (s, t))
     }
 
-    pub fn iter_enabled(&self) -> impl Iterator<Item = (&DefPathSegment, &ModInfo)> {
-        self.mods
+    pub fn iter_installed(&self) -> impl Iterator<Item = (&DefPath, &ModInfo)> {
+        self.installed_lookup
             .iter()
-            .filter(|(_, t)| t.enabled())
-            .map(|(s, t)| (s, t))
+            .filter_map(|(_, &id)| self.mods.get(id.index()))
+            .map(|(path, info)| (path, info))
     }
 
-    pub fn iter_disabled(&self) -> impl Iterator<Item = (&DefPathSegment, &ModInfo)> {
-        self.mods
+    pub fn iter_enabled(&self) -> impl Iterator<Item = (&DefPath, &ModInfo)> {
+        self.enabled_lookup
             .iter()
-            .filter(|(_, t)| !t.enabled())
-            .map(|(s, t)| (s, t))
+            .filter_map(|(_, &id)| self.mods.get(id.index()))
+            .map(|(path, info)| (path, info))
     }
 
-    pub fn iter_with_id(&self) -> impl Iterator<Item = (Id<ModInfo>, &DefPathSegment, &ModInfo)> {
+    pub fn iter_with_id(&self) -> impl Iterator<Item = (Id<ModInfo>, &DefPath, &ModInfo)> {
         self.mods
             .iter()
             .enumerate()
             .map(|(i, (s, t))| (Id::from_index(i), s, t))
     }
 
-    pub fn iter_enabled_with_id(
+    pub fn iter_installed_with_id(
         &self,
-    ) -> impl Iterator<Item = (Id<ModInfo>, &DefPathSegment, &ModInfo)> {
-        self.mods
-            .iter()
-            .enumerate()
-            .filter(|(_, (_, t))| t.enabled())
-            .map(|(i, (s, t))| (Id::from_index(i), s, t))
+    ) -> impl Iterator<Item = (Id<ModInfo>, &DefPath, &ModInfo)> {
+        self.installed_lookup.iter().filter_map(|(_, &id)| {
+            self.mods
+                .get(id.index())
+                .map(|(path, info)| (id, path, info))
+        })
     }
 
-    pub fn iter_disabled_with_id(
-        &self,
-    ) -> impl Iterator<Item = (Id<ModInfo>, &DefPathSegment, &ModInfo)> {
-        self.mods
-            .iter()
-            .enumerate()
-            .filter(|(_, (_, t))| !t.enabled())
-            .map(|(i, (s, t))| (Id::from_index(i), s, t))
+    pub fn iter_enabled_with_id(&self) -> impl Iterator<Item = (Id<ModInfo>, &DefPath, &ModInfo)> {
+        self.enabled_lookup.iter().filter_map(|(_, &id)| {
+            self.mods
+                .get(id.index())
+                .map(|(path, info)| (id, path, info))
+        })
     }
 }
 
@@ -328,7 +330,6 @@ impl Display for ModRegistry {
 pub struct ModInfo {
     path: PathBuf,
     metadata: ModMetadata,
-    enabled: bool,
 }
 
 impl ModInfo {
@@ -336,7 +337,7 @@ impl ModInfo {
         &self.path
     }
 
-    pub fn id(&self) -> &DefPathSegment {
+    pub fn id(&self) -> &DefPath {
         &self.metadata.id
     }
 
@@ -352,30 +353,12 @@ impl ModInfo {
         &self.metadata.author
     }
 
-    pub fn dependencies(&self) -> &HashMap<DefPathSegment, String> {
+    pub fn dependencies(&self) -> &HashMap<DefPath, String> {
         &self.metadata.dependencies
     }
 
-    pub fn optional_dependencies(&self) -> &HashMap<DefPathSegment, String> {
+    pub fn optional_dependencies(&self) -> &HashMap<DefPath, String> {
         &self.metadata.optional_dependencies
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.enabled
-    }
-
-    pub fn enable(&mut self) {
-        let _ = fs::remove_file(self.disable_path());
-        self.enabled = true;
-    }
-
-    pub fn disable(&mut self) {
-        let _ = fs::write(self.disable_path(), []);
-        self.enabled = false;
-    }
-
-    pub fn disable_path(&self) -> PathBuf {
-        self.path.join("disabled")
     }
 }
 
@@ -406,25 +389,20 @@ impl Display for ModInfo {
         }
         write!(
             f,
-            "; path: mods/{}; {}",
+            "; path: mods/{};",
             self.path().strip_prefix(mods_path()).unwrap().display(),
-            if self.enabled() {
-                "enabled"
-            } else {
-                "disabled"
-            }
         )
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ModMetadata {
-    pub id: DefPathSegment,
+    pub id: DefPath,
     pub name: String,
     pub version: String,
     pub author: String,
-    pub dependencies: HashMap<DefPathSegment, String>,
-    pub optional_dependencies: HashMap<DefPathSegment, String>,
+    pub dependencies: HashMap<DefPath, String>,
+    pub optional_dependencies: HashMap<DefPath, String>,
 }
 
 impl<'de> Deserialize<'de> for ModMetadata {
@@ -434,12 +412,12 @@ impl<'de> Deserialize<'de> for ModMetadata {
     {
         #[derive(Deserialize)]
         struct RawMetadata {
-            pub id: DefPathSegment,
+            pub id: DefPath,
             pub name: String,
             pub version: String,
             pub author: String,
-            pub dependencies: Option<HashMap<DefPathSegment, String>>,
-            pub optional_dependencies: Option<HashMap<DefPathSegment, String>>,
+            pub dependencies: Option<HashMap<DefPath, String>>,
+            pub optional_dependencies: Option<HashMap<DefPath, String>>,
         }
 
         let raw = RawMetadata::deserialize(deserializer)?;
@@ -458,7 +436,7 @@ pub trait Definition: Sized + Send + Sync + 'static {
     const DIR: &'static str;
 
     fn load(
-        mod_id: DefPathSegment,
+        mod_id: DefPath,
         path: PathBuf,
     ) -> impl Future<Output = Result<(DefPath, Self), DefinitionLoadError>> + Send;
 }

@@ -1,64 +1,45 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     time::Instant,
 };
 
 use bevy::prelude::*;
 use semver::{Version, VersionReq};
 
-use crate::modding::{DefPathSegment, Id, ModInfo, ModLoadState, ModRegistry};
+use crate::modding::{DefPath, Id, ModInfo, ModLoadState, ModRegistry};
 
 pub fn validate_mods(
     mut next_state: ResMut<NextState<ModLoadState>>,
     mut mods: ResMut<ModRegistry>,
 ) {
-    #[cfg(feature = "no_disable")]
-    info!("no_disable is true");
-
     let instant = Instant::now();
 
     if let Err(dep_errors) = validate_dependencies(&mods) {
         for error in dep_errors {
-            #[cfg(not(feature = "no_disable"))]
-            error
-                .mods()
-                .into_iter()
-                .for_each(|segment| mods.disable_segment(segment));
-
+            error.mods().into_iter().for_each(|path| mods.disable(path));
             error!("Validation error: {}", error);
         }
     }
 
     if let Err(cycle_errors) = detect_cycles(&mods) {
         for error in cycle_errors {
-            #[cfg(not(feature = "no_disable"))]
-            error
-                .mods()
-                .into_iter()
-                .for_each(|segment| mods.disable_segment(segment));
-
+            error.mods().into_iter().for_each(|path| mods.disable(path));
             error!("Validation error: {}", error);
         }
     }
 
     match topological_sort(&mods) {
         Ok(order) => {
-            mods.load_order = order;
-
             let elapsed = instant.elapsed();
-
             info!("Mod validation complete ({}ms)", elapsed.as_millis_f32());
 
+            mods.load_order = order;
             next_state.set(ModLoadState::Register);
         }
         Err(errors) => {
             for error in errors {
-                #[cfg(not(feature = "no_disable"))]
-                error
-                    .mods()
-                    .into_iter()
-                    .for_each(|segment| mods.disable_segment(segment));
-
+                error.mods().into_iter().for_each(|path| mods.disable(path));
                 error!("Validation error: {}", error);
             }
         }
@@ -70,51 +51,51 @@ pub fn validate_mods(
 pub enum ModValidationError {
     /// A version constraint is not satisfied
     VersionMismatch {
-        mod_id: DefPathSegment,
-        dependency_id: DefPathSegment,
+        dependent: DefPath,
+        dependency: DefPath,
         required: String,
         found: Option<String>,
     },
     /// Circular dependency detected
-    CircularDependency { cycle: Vec<DefPathSegment> },
+    CircularDependency { cycle: Vec<DefPath> },
 }
 
 impl ModValidationError {
     #[allow(dead_code)]
     /// Returns the IDs of the mods involved in the error
-    pub fn mods(&self) -> Vec<&DefPathSegment> {
+    pub fn mods(&self) -> Vec<&DefPath> {
         match self {
-            ModValidationError::VersionMismatch { mod_id, .. } => vec![mod_id],
+            ModValidationError::VersionMismatch { dependent, .. } => vec![dependent],
             ModValidationError::CircularDependency { cycle } => cycle.iter().collect(),
         }
     }
 }
 
-impl std::fmt::Display for ModValidationError {
+impl Display for ModValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ModValidationError::VersionMismatch {
-                mod_id,
-                dependency_id: dependency,
+                dependent,
+                dependency,
                 required,
                 found: None,
             } => {
                 write!(
                     f,
                     "mod '{}' requires '{}' version '{}', but it is not present",
-                    mod_id, dependency, required,
+                    dependent, dependency, required,
                 )
             }
             ModValidationError::VersionMismatch {
-                mod_id,
-                dependency_id: dependency,
+                dependent,
+                dependency,
                 required,
                 found: Some(found),
             } => {
                 write!(
                     f,
                     "mod '{}' requires '{}' version '{}', but found version '{}'",
-                    mod_id, dependency, required, found,
+                    dependent, dependency, required, found,
                 )
             }
             ModValidationError::CircularDependency { cycle } => {
@@ -135,9 +116,9 @@ impl std::error::Error for ModValidationError {}
 fn validate_dependencies(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> {
     let mut errors = Vec::new();
 
-    for (mod_id, mod_info) in registry.iter_enabled() {
-        validate_required_dependencies(registry, &mut errors, mod_id, mod_info);
-        validate_optional_dependencies(registry, &mut errors, mod_id, mod_info);
+    for (path, info) in registry.iter_enabled() {
+        validate_required_dependencies(registry, &mut errors, path, info);
+        validate_optional_dependencies(registry, &mut errors, path, info);
     }
 
     if errors.is_empty() {
@@ -150,29 +131,19 @@ fn validate_dependencies(registry: &ModRegistry) -> Result<(), Vec<ModValidation
 fn validate_required_dependencies(
     registry: &ModRegistry,
     errors: &mut Vec<ModValidationError>,
-    mod_id: &DefPathSegment,
-    mod_info: &ModInfo,
+    path: &DefPath,
+    info: &ModInfo,
 ) {
-    for (dep_id, version_req) in mod_info.dependencies() {
-        let Some(dep_info) = registry.get_by_segment(&dep_id) else {
+    for (dep_path, version_req) in info.dependencies() {
+        let Some(dep_info) = registry.get_enabled_by_segment(&dep_path) else {
             errors.push(ModValidationError::VersionMismatch {
-                mod_id: mod_id.clone(),
-                dependency_id: dep_id.clone(),
+                dependent: path.clone(),
+                dependency: dep_path.clone(),
                 required: version_req.clone(),
                 found: None,
             });
             continue;
         };
-
-        if !dep_info.enabled() {
-            errors.push(ModValidationError::VersionMismatch {
-                mod_id: mod_id.clone(),
-                dependency_id: dep_id.clone(),
-                required: version_req.clone(),
-                found: None,
-            });
-            continue;
-        }
 
         if let (Ok(req), Ok(ver)) = (
             VersionReq::parse(version_req),
@@ -180,8 +151,8 @@ fn validate_required_dependencies(
         ) {
             if !req.matches(&ver) {
                 errors.push(ModValidationError::VersionMismatch {
-                    mod_id: mod_id.clone(),
-                    dependency_id: dep_id.clone().into(),
+                    dependent: path.clone(),
+                    dependency: dep_path.clone(),
                     required: version_req.clone(),
                     found: Some(dep_info.version().to_owned()),
                 });
@@ -193,17 +164,13 @@ fn validate_required_dependencies(
 fn validate_optional_dependencies(
     registry: &ModRegistry,
     errors: &mut Vec<ModValidationError>,
-    mod_id: &DefPathSegment,
-    mod_info: &ModInfo,
+    path: &DefPath,
+    info: &ModInfo,
 ) {
-    for (dep_id, version_req) in mod_info.optional_dependencies() {
-        let Some(dep_info) = registry.get_by_segment(&dep_id) else {
+    for (dep_path, version_req) in info.optional_dependencies() {
+        let Some(dep_info) = registry.get_enabled_by_segment(&dep_path) else {
             continue;
         };
-
-        if !dep_info.enabled() {
-            continue;
-        }
 
         if let (Ok(req), Ok(ver)) = (
             VersionReq::parse(version_req),
@@ -211,8 +178,8 @@ fn validate_optional_dependencies(
         ) {
             if !req.matches(&ver) {
                 errors.push(ModValidationError::VersionMismatch {
-                    mod_id: mod_id.clone(),
-                    dependency_id: dep_id.clone().into(),
+                    dependent: path.clone(),
+                    dependency: dep_path.clone(),
                     required: version_req.clone(),
                     found: Some(dep_info.version().to_owned()),
                 });
@@ -241,19 +208,10 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
         path.push(id);
 
         if let Some(mod_info) = registry.get(id) {
-            for (dep_segment, _) in mod_info.dependencies() {
-                let Some(dep_id) = registry.lookup(dep_segment) else {
-                    #[cfg(feature = "no_disable")]
-                    continue;
-
-                    #[cfg(not(feature = "no_disable"))]
+            for (dep_path, _) in mod_info.dependencies() {
+                let Some(dep_id) = registry.lookup_enabled(dep_path) else {
                     unreachable!("should have already been validated");
                 };
-
-                let dep_info = registry.get(dep_id).unwrap();
-                if !dep_info.enabled() {
-                    continue;
-                }
 
                 if !visited.contains(&dep_id) {
                     if dfs(dep_id, registry, visited, rec_stack, path, errors) {
@@ -261,7 +219,7 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
                     }
                 } else if rec_stack.contains(&dep_id) {
                     let cycle_start = path.iter().position(|&x| x == dep_id).unwrap();
-                    let cycle: Vec<DefPathSegment> = path[cycle_start..]
+                    let cycle: Vec<DefPath> = path[cycle_start..]
                         .into_iter()
                         .map(|&id| registry.resolve(id).unwrap().clone())
                         .collect();
@@ -270,15 +228,10 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
                 }
             }
 
-            for (dep_segment, _) in mod_info.optional_dependencies() {
-                let Some(dep_id) = registry.lookup(dep_segment) else {
+            for (dep_path, _) in mod_info.optional_dependencies() {
+                let Some(dep_id) = registry.lookup_enabled(dep_path) else {
                     continue;
                 };
-
-                let dep_info = registry.get(dep_id).unwrap();
-                if !dep_info.enabled() {
-                    continue;
-                }
 
                 if !visited.contains(&dep_id) {
                     if dfs(dep_id, registry, visited, rec_stack, path, errors) {
@@ -286,7 +239,7 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
                     }
                 } else if rec_stack.contains(&dep_id) {
                     let cycle_start = path.iter().position(|&x| x == dep_id).unwrap();
-                    let cycle: Vec<DefPathSegment> = path[cycle_start..]
+                    let cycle: Vec<DefPath> = path[cycle_start..]
                         .into_iter()
                         .map(|&id| registry.resolve(id).unwrap().clone())
                         .collect();
@@ -333,28 +286,18 @@ fn topological_sort(registry: &ModRegistry) -> Result<Vec<Id<ModInfo>>, Vec<ModV
     }
 
     // Build the graph: for each dependency, add an edge from dependency to dependent
-    for (mod_id, _, mod_info) in registry.iter_enabled_with_id() {
-        for (dep_segment, _) in mod_info.dependencies() {
-            if let Some(dep_id) = registry.lookup(dep_segment) {
-                let dep_info = registry.get(dep_id).unwrap();
-                if !dep_info.enabled() {
-                    continue;
-                }
-
-                adjacency.entry(dep_id).and_modify(|deps| deps.push(mod_id));
-                *in_degree.entry(mod_id).or_insert(0) += 1;
+    for (id, _, info) in registry.iter_enabled_with_id() {
+        for (dep_path, _) in info.dependencies() {
+            if let Some(dep_id) = registry.lookup_enabled(dep_path) {
+                adjacency.entry(dep_id).and_modify(|deps| deps.push(id));
+                *in_degree.entry(id).or_insert(0) += 1;
             }
         }
 
-        for (dep_segment, _) in mod_info.optional_dependencies() {
-            if let Some(dep_id) = registry.lookup(dep_segment) {
-                let dep_info = registry.get(dep_id).unwrap();
-                if !dep_info.enabled() {
-                    continue;
-                }
-
-                adjacency.entry(dep_id).and_modify(|deps| deps.push(mod_id));
-                *in_degree.entry(mod_id).or_insert(0) += 1;
+        for (dep_segment, _) in info.optional_dependencies() {
+            if let Some(dep_id) = registry.lookup_enabled(dep_segment) {
+                adjacency.entry(dep_id).and_modify(|deps| deps.push(id));
+                *in_degree.entry(id).or_insert(0) += 1;
             }
         }
     }
@@ -413,22 +356,21 @@ mod tests {
             let mod_info = ModInfo {
                 path: std::path::PathBuf::from(format!("/mod/{}", id)),
                 metadata: ModMetadata {
-                    id: DefPathSegment::new(id).unwrap(),
+                    id: DefPath::new(id).unwrap(),
                     name: format!("{} Name", id),
                     version: "1.0.0".to_string(),
                     author: "Test Author".to_string(),
                     dependencies: deps
                         .into_iter()
-                        .map(|(dep, ver)| (DefPathSegment::new(dep).unwrap(), ver.to_string()))
+                        .map(|(dep, ver)| (DefPath::new(dep).unwrap(), ver.to_string()))
                         .collect(),
                     optional_dependencies: optional_deps
                         .into_iter()
-                        .map(|(dep, ver)| (DefPathSegment::new(dep).unwrap(), ver.to_string()))
+                        .map(|(dep, ver)| (DefPath::new(dep).unwrap(), ver.to_string()))
                         .collect(),
                 },
-                enabled: true,
             };
-            registry.register(DefPathSegment::new(id).unwrap(), mod_info);
+            registry.register(DefPath::new(id).unwrap(), mod_info);
         }
         registry
     }
@@ -453,10 +395,10 @@ mod tests {
 
         // Register mod_b first with matching version
         let mod_b_info = registry
-            .get_by_segment(&DefPathSegment::new("mod_b").unwrap())
+            .get_enabled_by_segment(&DefPath::new("mod_b").unwrap())
             .unwrap()
             .clone();
-        registry.register(DefPathSegment::new("mod_b").unwrap(), mod_b_info);
+        registry.register(DefPath::new("mod_b").unwrap(), mod_b_info);
 
         // This should not produce any errors
         let result = validate_dependencies(&registry);
@@ -471,8 +413,8 @@ mod tests {
         assert!(matches!(
             result,
             Err(errors) if errors.len() == 1 && matches!(&errors[0],
-                ModValidationError::VersionMismatch { mod_id, dependency_id, required, found: None }
-                if mod_id.to_string() == "mod_a" && dependency_id.to_string() == "mod_b" && required == "^1.0"
+                ModValidationError::VersionMismatch { dependent, dependency, required, found: None }
+                if dependent.to_string() == "mod_a" && dependency.to_string() == "mod_b" && required == "^1.0"
             )
         ));
     }
@@ -592,13 +534,13 @@ mod tests {
         let order = result.unwrap();
         // mod_a should come before mod_b and mod_c
         let mod_a_id = registry
-            .lookup(&DefPathSegment::new("mod_a").unwrap())
+            .lookup_enabled(&DefPath::new("mod_a").unwrap())
             .unwrap();
         let mod_b_id = registry
-            .lookup(&DefPathSegment::new("mod_b").unwrap())
+            .lookup_enabled(&DefPath::new("mod_b").unwrap())
             .unwrap();
         let mod_c_id = registry
-            .lookup(&DefPathSegment::new("mod_c").unwrap())
+            .lookup_enabled(&DefPath::new("mod_c").unwrap())
             .unwrap();
 
         let mod_a_pos = order.iter().position(|&id| id == mod_a_id).unwrap();
@@ -651,8 +593,8 @@ mod tests {
     #[test]
     fn test_validation_error_display_version_mismatch() {
         let error = ModValidationError::VersionMismatch {
-            mod_id: DefPathSegment::new("mod_a").unwrap(),
-            dependency_id: DefPathSegment::new("mod_b").unwrap(),
+            dependent: DefPath::new("mod_a").unwrap(),
+            dependency: DefPath::new("mod_b").unwrap(),
             required: "^1.0".to_string(),
             found: None,
         };
@@ -661,8 +603,8 @@ mod tests {
         assert_eq!(error.to_string(), expected);
 
         let error_with_found = ModValidationError::VersionMismatch {
-            mod_id: DefPathSegment::new("mod_a").unwrap(),
-            dependency_id: DefPathSegment::new("mod_b").unwrap(),
+            dependent: DefPath::new("mod_a").unwrap(),
+            dependency: DefPath::new("mod_b").unwrap(),
             required: "^2.0".to_string(),
             found: Some("1.0.0".to_string()),
         };
@@ -675,9 +617,9 @@ mod tests {
     fn test_validation_error_display_circular_dependency() {
         let error = ModValidationError::CircularDependency {
             cycle: vec![
-                DefPathSegment::new("a").unwrap(),
-                DefPathSegment::new("b").unwrap(),
-                DefPathSegment::new("c").unwrap(),
+                DefPath::new("a").unwrap(),
+                DefPath::new("b").unwrap(),
+                DefPath::new("c").unwrap(),
             ],
         };
 
@@ -705,19 +647,19 @@ mod tests {
 
         let order = topological_sort(&registry).unwrap();
         let e_id = registry
-            .lookup(&DefPathSegment::new("mod_e").unwrap())
+            .lookup_enabled(&DefPath::new("mod_e").unwrap())
             .unwrap();
         let d_id = registry
-            .lookup(&DefPathSegment::new("mod_d").unwrap())
+            .lookup_enabled(&DefPath::new("mod_d").unwrap())
             .unwrap();
         let c_id = registry
-            .lookup(&DefPathSegment::new("mod_c").unwrap())
+            .lookup_enabled(&DefPath::new("mod_c").unwrap())
             .unwrap();
         let b_id = registry
-            .lookup(&DefPathSegment::new("mod_b").unwrap())
+            .lookup_enabled(&DefPath::new("mod_b").unwrap())
             .unwrap();
         let a_id = registry
-            .lookup(&DefPathSegment::new("mod_a").unwrap())
+            .lookup_enabled(&DefPath::new("mod_a").unwrap())
             .unwrap();
 
         let e_pos = order.iter().position(|&id| id == e_id).unwrap();

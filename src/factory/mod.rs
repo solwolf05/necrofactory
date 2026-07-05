@@ -6,8 +6,7 @@ use serde::Deserialize;
 use crate::{
     item::ItemDef,
     modding::{
-        DefPath, DefPathSegment, Definition, DefinitionLoadError, Id, Registry, ResolutionError,
-        Resolve, resolve,
+        DefPath, Definition, DefinitionLoadError, Id, Registry, ResolutionError, Resolve, resolve,
     },
 };
 
@@ -25,10 +24,7 @@ pub struct MachineDef {
 impl Definition for MachineDef {
     const DIR: &'static str = "machines";
 
-    async fn load(
-        mod_id: DefPathSegment,
-        path: PathBuf,
-    ) -> Result<(DefPath, Self), DefinitionLoadError> {
+    async fn load(mod_id: DefPath, path: PathBuf) -> Result<(DefPath, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
         struct RawMachineDef {
             path: DefPath,
@@ -87,10 +83,7 @@ pub struct RecipeDef {
 impl Definition for RecipeDef {
     const DIR: &'static str = "recipes";
 
-    async fn load(
-        mod_id: DefPathSegment,
-        path: PathBuf,
-    ) -> Result<(DefPath, Self), DefinitionLoadError> {
+    async fn load(mod_id: DefPath, path: PathBuf) -> Result<(DefPath, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
         struct RawRecipeDef {
             path: DefPath,
@@ -161,10 +154,7 @@ pub struct RecipeKindDef {}
 impl Definition for RecipeKindDef {
     const DIR: &'static str = "recipe_kinds";
 
-    async fn load(
-        mod_id: DefPathSegment,
-        path: PathBuf,
-    ) -> Result<(DefPath, Self), DefinitionLoadError> {
+    async fn load(mod_id: DefPath, path: PathBuf) -> Result<(DefPath, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
         struct RawRecipeKindDef {
             path: DefPath,

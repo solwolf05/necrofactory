@@ -85,7 +85,7 @@ pub fn log(pending: Res<TotalPending>, active: Res<TotalActive>, complete: Res<T
         "{} / {} ({}%)",
         complete.0,
         total,
-        complete.0 * 100 / (total)
+        (complete.0 * 100).checked_div(total).unwrap_or(100)
     )
 }
 

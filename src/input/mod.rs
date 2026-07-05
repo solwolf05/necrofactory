@@ -14,9 +14,7 @@ use serde::Deserialize;
 use crate::{
     GameState,
     math::HybridVec2,
-    modding::{
-        DefPath, DefPathSegment, Definition, DefinitionLoadError, Id, ModLoadState, Registry,
-    },
+    modding::{DefPath, Definition, DefinitionLoadError, Id, ModLoadState, Registry},
     world::{BaseChunk, TILE_SIZE},
 };
 
@@ -312,10 +310,7 @@ impl InputAction {
 impl Definition for InputAction {
     const DIR: &'static str = "inputs";
 
-    async fn load(
-        mod_id: DefPathSegment,
-        path: PathBuf,
-    ) -> Result<(DefPath, Self), DefinitionLoadError> {
+    async fn load(mod_id: DefPath, path: PathBuf) -> Result<(DefPath, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
         struct RawInputAction {
             path: DefPath,

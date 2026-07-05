@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::fs;
+
 use bevy::{
     camera::ScalingMode,
     prelude::*,
@@ -8,7 +10,7 @@ use bevy::{
 
 // use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use necrofactory::{
-    GameState,
+    Config, GameState,
     debug::{
         DebugPlugin, coord::CoordinateDebugPlugin, jetpack::JetPackDebugPlugin,
         physics::PhysicsDebugPlugin, probe::ProbePlugin,
@@ -98,7 +100,26 @@ fn main() -> AppExit {
         .run()
 }
 
-fn boot(mut state: ResMut<NextState<GameState>>) {
+fn boot(mut commands: Commands, mut state: ResMut<NextState<GameState>>) {
+    let path = "/home/solwolf/dev/necrofactory/config.toml";
+
+    let Ok(config_str) = fs::read_to_string(&path) else {
+        commands.insert_resource(Config::default());
+        state.set(GameState::ModLoading);
+        return;
+    };
+
+    let config: Config = match toml::from_str(&config_str) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("Error parsing config at {}: {}", path, e);
+            commands.insert_resource(Config::default());
+            state.set(GameState::ModLoading);
+            return;
+        }
+    };
+
+    commands.insert_resource(config);
     state.set(GameState::ModLoading);
 }
 

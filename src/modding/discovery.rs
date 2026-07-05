@@ -2,11 +2,13 @@ use std::{fs, time::Instant};
 
 use bevy::prelude::*;
 
+use crate::Config;
 use crate::modding::{ModInfo, ModLoadState, ModMetadata, ModRegistry, mods_path};
 
 pub fn discover_mods(
     mut next_state: ResMut<NextState<ModLoadState>>,
     mut mods: ResMut<ModRegistry>,
+    mut config: ResMut<Config>,
 ) {
     let instant = Instant::now();
 
@@ -19,7 +21,7 @@ pub fn discover_mods(
         }
     };
 
-    mods.clear();
+    // mods.clear();
 
     for dir in entries {
         let path = dir.path();
@@ -37,18 +39,26 @@ pub fn discover_mods(
             }
         };
 
-        let enabled = !path.join("disabled").exists();
-        let mod_info = ModInfo {
-            path,
-            metadata,
-            enabled,
-        };
+        let mod_info = ModInfo { path, metadata };
+        let id = mod_info.id().clone();
 
-        mods.register(mod_info.metadata.id.clone(), mod_info);
+        mods.register(id.clone(), mod_info);
+
+        if config.installed_mods.contains(&id) {
+            mods.disable(&id);
+        } else if !config.enabled_mods.contains(&id) {
+            config.enabled_mods.push(id);
+        }
     }
 
     let elapsed = instant.elapsed();
     info!("Mod discovery complete ({}ms)", elapsed.as_millis_f32());
+
+    fs::write(
+        "/home/solwolf/dev/necrofactory/config.toml",
+        toml::to_string_pretty(config.into_inner()).unwrap(),
+    )
+    .unwrap();
 
     next_state.set(ModLoadState::Validate);
 }

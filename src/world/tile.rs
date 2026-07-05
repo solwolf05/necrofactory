@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use serde::Deserialize;
 
-use crate::modding::{DefPath, DefPathSegment, Definition, DefinitionLoadError, Id};
+use crate::modding::{DefPath, Definition, DefinitionLoadError, Id};
 
 #[derive(Debug)]
 pub struct TileDef {
@@ -14,10 +14,7 @@ pub struct TileDef {
 impl Definition for TileDef {
     const DIR: &'static str = "tiles";
 
-    async fn load(
-        mod_id: DefPathSegment,
-        path: PathBuf,
-    ) -> Result<(DefPath, Self), DefinitionLoadError> {
+    async fn load(mod_id: DefPath, path: PathBuf) -> Result<(DefPath, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
         struct RawTileDef {
             path: DefPath,

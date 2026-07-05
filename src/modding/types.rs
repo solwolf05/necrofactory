@@ -190,89 +190,25 @@ impl<T> Hash for Id<T> {
     }
 }
 
-/// A newtype wrapper over a `String` that ensures the segment is valid.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deref)]
-pub struct DefPathSegment(String);
-
-impl DefPathSegment {
-    pub fn new(segment: &str) -> Option<Self> {
-        is_valid_segment(segment).then(|| Self(segment.into()))
-    }
-
-    pub fn join(&self, other: DefPath) -> DefPath {
-        DefPath(format!("{}::{}", self, other))
-    }
-}
-
-impl Display for DefPathSegment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl TryFrom<&str> for DefPathSegment {
-    type Error = ();
-
-    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        Self::new(value).ok_or(())
-    }
-}
-
-impl FromStr for DefPathSegment {
-    type Err = ();
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        Self::new(s).ok_or(())
-    }
-}
-
-impl Serialize for DefPathSegment {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for DefPathSegment {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Self::new(&s).ok_or(()).map_err(|_| {
-            serde::de::Error::invalid_value(serde::de::Unexpected::Str(&s), &"a valid path segment")
-        })
-    }
-}
-
 /// A newtype wrapper over a `String` that ensures the path is valid.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deref)]
 pub struct DefPath(String);
 
 impl DefPath {
-    pub fn new(path: &str) -> Option<Self> {
-        if !Self::is_valid_path(path) {
+    pub fn new(path: impl Into<String>) -> Option<Self> {
+        let path = path.into();
+        if !Self::is_valid_path(&path) {
             return None;
         }
         Some(Self(path.into()))
     }
 
-    pub fn new_qualified(path: &str) -> Option<Self> {
-        if !Self::is_valid_qualified_path(path) {
+    pub fn new_qualified(path: impl Into<String>) -> Option<Self> {
+        let path = path.into();
+        if !Self::is_valid_qualified_path(&path) {
             return None;
         }
         Some(Self(path.into()))
-    }
-
-    pub fn from_parts(
-        namespace: impl TryInto<DefPath>,
-        path: impl TryInto<DefPath>,
-    ) -> Option<Self> {
-        let namespace = namespace.try_into().ok()?;
-        let path = path.try_into().ok()?;
-        Self::new(&format!("{}::{}", namespace, path))
     }
 
     pub fn join(&self, other: DefPath) -> DefPath {
@@ -302,19 +238,35 @@ impl DefPath {
             return false;
         }
 
-        segments.into_iter().all(|s| is_valid_segment(s))
+        segments.into_iter().all(|s| Self::is_valid_segment(s))
+    }
+
+    /// Checks if a segment is valid.
+    /// Segments must contain only lowercase letters, numbers, and underscores.
+    /// They may not start or end with an underscore or start with a number.
+    fn is_valid_segment(segment: &str) -> bool {
+        if segment.is_empty() || segment.starts_with('_') || segment.ends_with('_') {
+            return false;
+        }
+
+        let first_char = match segment.chars().next() {
+            Some(c) => c,
+            None => return false,
+        };
+
+        if first_char.is_ascii_digit() {
+            return false;
+        }
+
+        segment
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
     }
 }
 
 impl Display for DefPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl From<DefPathSegment> for DefPath {
-    fn from(value: DefPathSegment) -> Self {
-        Self(value.0)
     }
 }
 
@@ -367,26 +319,4 @@ impl<'de> Deserialize<'de> for DefPath {
             serde::de::Error::invalid_value(serde::de::Unexpected::Str(&s), &"a valid path")
         })
     }
-}
-
-/// Checks if a segment is valid.
-/// Segments must contain only lowercase letters, numbers, and underscores.
-/// They may not start or end with an underscore or start with a number.
-pub fn is_valid_segment(segment: &str) -> bool {
-    if segment.is_empty() || segment.starts_with('_') || segment.ends_with('_') {
-        return false;
-    }
-
-    let first_char = match segment.chars().next() {
-        Some(c) => c,
-        None => return false,
-    };
-
-    if first_char.is_ascii_digit() {
-        return false;
-    }
-
-    segment
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
