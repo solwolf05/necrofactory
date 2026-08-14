@@ -15,13 +15,11 @@ use necrofactory::{
         DebugPlugin, coord::CoordinateDebugPlugin, jetpack::JetPackDebugPlugin,
         physics::PhysicsDebugPlugin, probe::ProbePlugin,
     },
-    factory::{FactoryPlugin, MachineDef, RecipeDef, RecipeKindDef},
+    factory::{FactoryPlugin, MachineDef, RecipeDef, RecipeKindDef, ResolvedRecipe},
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState, WorldCursor},
     item::ItemDef,
-    modding::{
-        DefinitionPlugin, Id, ModAssetSourcePlugin, ModPlugin, Registry, ResolveDefinitionPlugin,
-    },
+    modding::{DefinitionPlugin, Id, ModAssetSourcePlugin, ModPlugin, Registry, ResolvedRegistry},
     physics::{Collider, Drag, Mass, PhysicsPlugin, Restitution, Rigidbody},
     player::{FuelTank, JetPackPlugin, Jetpack, JetpackControl, Player},
     world::{
@@ -57,9 +55,9 @@ fn main() -> AppExit {
             DefinitionPlugin::<TileDef>::default(),
             DefinitionPlugin::<InputAction>::default(),
             DefinitionPlugin::<ItemDef>::default(),
-            ResolveDefinitionPlugin::<RecipeDef>::default(),
+            DefinitionPlugin::<RecipeDef>::default(),
             DefinitionPlugin::<RecipeKindDef>::default(),
-            ResolveDefinitionPlugin::<MachineDef>::default(),
+            DefinitionPlugin::<MachineDef>::default(),
         ))
         .add_plugins((
             WorldPlugin,
@@ -80,7 +78,7 @@ fn main() -> AppExit {
         ))
         .insert_state(GameState::Boot)
         .add_systems(OnEnter(GameState::Boot), boot)
-        .add_systems(OnEnter(GameState::InGame), setup)
+        .add_systems(OnEnter(GameState::InGame), (setup, check_resolved))
         .add_systems(OnExit(GameState::InGame), cleanup)
         .add_systems(Update, (esc_exit, mod_reload))
         .add_systems(
@@ -121,6 +119,10 @@ fn boot(mut commands: Commands, mut state: ResMut<NextState<GameState>>) {
 
     commands.insert_resource(config);
     state.set(GameState::ModLoading);
+}
+
+fn check_resolved(registry: Res<ResolvedRegistry<ResolvedRecipe>>) {
+    info!("{:?}", registry.into_inner());
 }
 
 fn setup(mut commands: Commands) {

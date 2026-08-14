@@ -1,6 +1,6 @@
 #![feature(duration_millis_float)]
-#![feature(option_reference_flattening)]
 #![feature(iter_map_windows)]
+#![feature(option_reference_flattening)]
 
 use bevy::{ecs::resource::Resource, state::state::States};
 use serde::{Deserialize, Serialize};

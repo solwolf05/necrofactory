@@ -19,7 +19,7 @@ use validation::validate_mods;
 
 pub use asset_loading::TileSprites;
 pub use registration::DefinitionLoadError;
-pub use resolution::{ResolutionError, Resolve, ResolvedRegistry, resolve};
+pub use resolution::ResolvedRegistry;
 pub use types::*;
 
 mod asset_loading;
@@ -98,28 +98,12 @@ impl<D: Definition + Debug> Plugin for DefinitionPlugin<D> {
             );
         #[cfg(debug_assertions)]
         app.add_systems(OnExit(ModLoadState::Register), registration::check::<D>);
+
+        D::build(app);
     }
 }
 
 impl<D: Definition + Debug> Default for DefinitionPlugin<D> {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
-
-pub struct ResolveDefinitionPlugin<D: Definition + Debug>(PhantomData<D>);
-
-impl<D: Resolve + Debug> Plugin for ResolveDefinitionPlugin<D> {
-    fn build(&self, app: &mut App) {
-        app.add_plugins(DefinitionPlugin::<D>::default());
-        app.init_resource::<ResolvedRegistry<D>>().add_systems(
-            OnEnter(ModLoadState::Resolve),
-            resolution::resolve_registry::<D>,
-        );
-    }
-}
-
-impl<D: Definition + Debug> Default for ResolveDefinitionPlugin<D> {
     fn default() -> Self {
         Self(Default::default())
     }
@@ -439,4 +423,8 @@ pub trait Definition: Sized + Send + Sync + 'static {
         mod_id: DefPath,
         path: PathBuf,
     ) -> impl Future<Output = Result<(DefPath, Self), DefinitionLoadError>> + Send;
+
+    /// Extra setup
+    #[allow(unused)]
+    fn build(app: &mut App) {}
 }

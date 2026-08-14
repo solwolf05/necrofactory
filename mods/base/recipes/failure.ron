@@ -1,0 +1,11 @@
+(
+    path: "failure",
+    kind: "base::smelting",
+    inputs: [
+        ("base::bone", 1),
+    ],
+    outputs: [
+        ("base::bone", 2),
+    ],
+    time: 2.0,
+)

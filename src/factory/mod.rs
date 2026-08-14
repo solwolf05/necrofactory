@@ -6,7 +6,7 @@ use serde::Deserialize;
 use crate::{
     item::ItemDef,
     modding::{
-        DefPath, Definition, DefinitionLoadError, Id, Registry, ResolutionError, Resolve, resolve,
+        DefPath, Definition, DefinitionLoadError, Id, ModLoadState, Registry, ResolvedRegistry,
     },
 };
 
@@ -45,22 +45,6 @@ impl Definition for MachineDef {
     }
 }
 
-impl Resolve for MachineDef {
-    type Output = MachineDefResolved;
-
-    fn resolve(&self, world: &World) -> Result<Self::Output, ResolutionError> {
-        let registry = world.get_resource::<Registry<RecipeKindDef>>().unwrap();
-
-        let mut recipe_kinds = Vec::with_capacity(self.recipe_kinds.len());
-        for kind in &self.recipe_kinds {
-            let id = resolve(registry, kind)?;
-            recipe_kinds.push(id);
-        }
-
-        Ok(MachineDefResolved { recipe_kinds })
-    }
-}
-
 #[derive(Debug)]
 pub struct MachineDefResolved {
     recipe_kinds: Vec<Id<RecipeKindDef>>,
@@ -78,6 +62,37 @@ pub struct RecipeDef {
     inputs: Vec<(DefPath, usize)>,
     outputs: Vec<(DefPath, usize)>,
     time: f32,
+}
+
+impl RecipeDef {
+    fn resolve(
+        mut commands: Commands,
+        registry: Res<Registry<RecipeDef>>,
+        recipe_kinds: Res<Registry<RecipeKindDef>>,
+        items: Res<Registry<ItemDef>>,
+    ) {
+        let resolved = ResolvedRegistry::new(registry.iter().map(|(_, def)| {
+            let kind = recipe_kinds.lookup(&def.kind)?;
+            let inputs = def
+                .inputs
+                .iter()
+                .map(|(path, num)| Some((items.lookup(path)?, *num)))
+                .collect::<Option<Vec<_>>>()?;
+            let outputs = def
+                .outputs
+                .iter()
+                .map(|(path, num)| Some((items.lookup(path)?, *num)))
+                .collect::<Option<Vec<_>>>()?;
+            Some(ResolvedRecipe {
+                kind,
+                inputs,
+                outputs,
+                time: def.time,
+            })
+        }));
+
+        commands.insert_resource(resolved);
+    }
 }
 
 impl Definition for RecipeDef {
@@ -108,40 +123,14 @@ impl Definition for RecipeDef {
             },
         ))
     }
-}
 
-impl Resolve for RecipeDef {
-    type Output = Recipe;
-
-    fn resolve(&self, world: &World) -> Result<Self::Output, ResolutionError> {
-        let recipe_kinds = world.get_resource::<Registry<RecipeKindDef>>().unwrap();
-        let items = world.get_resource::<Registry<ItemDef>>().unwrap();
-
-        let kind = resolve(recipe_kinds, &self.kind)?;
-
-        let mut inputs = Vec::with_capacity(self.inputs.len());
-        for (item, count) in &self.inputs {
-            let id = resolve(items, item)?;
-            inputs.push((id, *count));
-        }
-
-        let mut outputs = Vec::with_capacity(self.outputs.len());
-        for (item, count) in &self.outputs {
-            let id = resolve(items, item)?;
-            outputs.push((id, *count));
-        }
-
-        Ok(Recipe {
-            kind,
-            inputs,
-            outputs,
-            time: self.time,
-        })
+    fn build(app: &mut App) {
+        app.add_systems(OnEnter(ModLoadState::Resolve), Self::resolve);
     }
 }
 
 #[derive(Debug)]
-pub struct Recipe {
+pub struct ResolvedRecipe {
     kind: Id<RecipeKindDef>,
     inputs: Vec<(Id<ItemDef>, usize)>,
     outputs: Vec<(Id<ItemDef>, usize)>,

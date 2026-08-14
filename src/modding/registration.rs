@@ -111,6 +111,7 @@ fn read_mod_dir(id: Id<ModInfo>, mod_info: &ModInfo, path: &str) -> Vec<(Id<ModI
         .flatten()
         .flatten()
         .map(|entry| (id, entry.path()))
+        .filter(|(_, path)| path.extension().is_some_and(|ex| ex == "ron"))
         .collect()
 }
 
@@ -127,7 +128,7 @@ pub fn spawn<D: Definition>(
 ) {
     let pool = IoTaskPool::get();
 
-    while active.0.len() < MAX_CONCURRENT_IO
+    while total_active.0 < MAX_CONCURRENT_IO
         && let Some((mod_id, path)) = pending.0.pop_front()
     {
         let mod_info = mods.get(mod_id).unwrap().id();
