@@ -1,5 +1,5 @@
 (
-    path: "failure",
+    id: "failure",
     kind: "base::smelting",
     inputs: [
         ("base::bone", 1),

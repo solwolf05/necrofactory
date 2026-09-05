@@ -3,7 +3,7 @@ use std::{fs, time::Instant};
 use bevy::prelude::*;
 
 use crate::Config;
-use crate::modding::{ModInfo, ModLoadState, ModMetadata, ModRegistry, mods_path};
+use crate::modding::{ModInfo, ModLoadState, ModMetadata, ModRegistry, mods_dir};
 
 pub fn discover_mods(
     mut next_state: ResMut<NextState<ModLoadState>>,
@@ -12,7 +12,12 @@ pub fn discover_mods(
 ) {
     let instant = Instant::now();
 
-    let entries = match fs::read_dir(mods_path()) {
+    let mods_dir = if config.mods_dir.exists() {
+        &config.mods_dir
+    } else {
+        &mods_dir()
+    };
+    let entries = match fs::read_dir(mods_dir) {
         Ok(e) => e.flatten(),
         Err(e) => {
             error!("Error reading mods dir: {}", e);
@@ -44,7 +49,7 @@ pub fn discover_mods(
 
         mods.register(id.clone(), mod_info);
 
-        if config.installed_mods.contains(&id) {
+        if config.disabled_mods.contains(&id) {
             mods.disable(&id);
         } else if !config.enabled_mods.contains(&id) {
             config.enabled_mods.push(id);

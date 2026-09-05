@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     GameState,
-    modding::{Id, Registry},
+    modding::{DefHandle, Registry},
     world::{
         BaseChunk, World,
         chunk::{Chunk, TilePosition},
@@ -35,7 +35,7 @@ pub fn test_gen_chunk(world: &mut World, pos: IVec2, registry: &Registry<TileDef
     let mut chunk = Chunk::empty();
     let chunk_factor = rand::random::<f32>() / 2.0 + 0.5;
     if pos.y < -1 {
-        let tile = Tile::new(Id::new(1));
+        let tile = Tile::new(DefHandle::new(1));
         for x in 0..=15 {
             for y in 0..=15 as u8 {
                 chunk.insert(TilePosition::from_xy(x, y), tile);
@@ -43,14 +43,14 @@ pub fn test_gen_chunk(world: &mut World, pos: IVec2, registry: &Registry<TileDef
         }
     } else if pos.y == -1 {
         let random = rand::random_range(0..registry.len());
-        let tile = Tile::new(Id::from_index(random));
+        let tile = Tile::new(DefHandle::from_index(random));
         for x in 0..=15 {
             for y in 0..=15 as u8 {
                 chunk.insert(TilePosition::from_xy(x, y), tile);
             }
         }
     } else {
-        let tile = Tile::new(Id::new(1));
+        let tile = Tile::new(DefHandle::new(1));
         for x in 0..=15 {
             for y in 0..=15 as u8 {
                 let radius = 10.0;

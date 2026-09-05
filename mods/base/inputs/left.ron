@@ -1,7 +1,7 @@
 (
-    path: "left",
+    id: "left",
     name: "Left",
-    default: InputBinding (
+    default: (
         kind: KeyButton(KeyA),
         shift: false,
         control: false,

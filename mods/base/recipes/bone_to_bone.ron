@@ -1,5 +1,5 @@
 (
-    path: "bone_to_bone",
+    id: "bone_to_bone",
     kind: "base::crafting",
     inputs: [
         ("base::bone", 1),

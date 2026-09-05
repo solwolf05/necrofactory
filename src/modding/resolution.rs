@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::modding::{Id, ModLoadState};
+use crate::modding::{DefHandle, ModLoadState};
 
 pub fn cleanup(mut next_state: ResMut<NextState<ModLoadState>>) {
     info!("Mod resolution complete");
@@ -26,7 +26,7 @@ where
     }
 
     /// Retrieves the definition associated with the given ID.
-    pub fn get(&self, id: Id<R>) -> Option<&R> {
-        self.definitions.get(id.index()).flatten_ref()
+    pub fn get(&self, handle: DefHandle<R>) -> Option<&R> {
+        self.definitions.get(handle.to_index()).flatten_ref()
     }
 }

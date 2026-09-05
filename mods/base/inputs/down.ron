@@ -1,5 +1,5 @@
 (
-    path: "down",
+    id: "down",
     name: "Down",
     default: (
         kind: KeyButton(KeyS),

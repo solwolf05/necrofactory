@@ -4,24 +4,24 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = {version = "0.18", default-features = false, features = ["2d", "debug", "serialize", "dynamic_linking"]}
+bevy = {version = "0.19", default-features = false, features = ["2d", "dev", "serialize", "ui", "dynamic_linking"]}
 # Set max log levels. This helps avoid unwanted low-severity log spam, which can affect performance.
 log = { version = "0.4", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
-ron = "0.12.0"
-serde = { version = "1.0.228", features = ["derive"] }
-toml = "0.9.10"
 tracing = { version = "0.1", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
-rand = "0.9.2"
-semver = "1.0.27"
-noiz = "0.4.0"
-bevy-inspector-egui = "0.36.0"
-smallvec = "1.15.1"
+ron = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+toml = "1.1"
+rand = "0.10"
+semver = "1.0"
+noiz = "0.5.0"
+bevy-inspector-egui = "0.37.0"
+smallvec = "1.15"
 
 # Idiomatic Bevy code often triggers these lints, and the CI workflow treats them as errors.
 # In some cases they may still signal poor code quality however, so consider commenting out these lines.

@@ -1,5 +1,5 @@
 (
-    path: "fast",
+    id: "fast",
     name: "Fast",
     default: (
         kind: KeyButton(ShiftLeft),

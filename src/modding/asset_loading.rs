@@ -3,23 +3,23 @@ use bevy::{platform::collections::HashMap, prelude::*};
 use crate::{
     modding::{
         ModLoadState,
-        types::{Id, Registry},
+        types::{DefHandle, Registry},
     },
     world::tile::TileDef,
 };
 
 #[derive(Debug, Default, Resource)]
-pub struct PendingSprites(pub HashMap<Id<TileDef>, Handle<Image>>);
+pub struct PendingSprites(pub HashMap<DefHandle<TileDef>, Handle<Image>>);
 
 #[derive(Debug, Default, Resource)]
 pub struct TileSprites {
     missing: Handle<Image>,
-    sprites: HashMap<Id<TileDef>, Handle<Image>>,
+    sprites: HashMap<DefHandle<TileDef>, Handle<Image>>,
 }
 
 impl TileSprites {
-    pub fn get(&self, id: Id<TileDef>) -> Handle<Image> {
-        self.sprites.get(&id).unwrap_or(&self.missing).clone()
+    pub fn get(&self, handle: DefHandle<TileDef>) -> Handle<Image> {
+        self.sprites.get(&handle).unwrap_or(&self.missing).clone()
     }
 }
 
@@ -35,9 +35,9 @@ pub fn begin_asset_loading(
     sprites.sprites.clear();
 
     let mut pending = PendingSprites::default();
-    for (id, _, tile) in tiles.iter_with_id() {
-        let handle = asset_server.load(&tile.sprite_path);
-        pending.0.insert(id, handle);
+    for (handle, tile) in tiles.iter_with_handle() {
+        let image_handle = asset_server.load(&tile.sprite_path);
+        pending.0.insert(handle, image_handle);
     }
     commands.insert_resource(pending);
 }
@@ -65,17 +65,17 @@ pub fn check_loaded(
         }
     }
 
-    for id in to_complete {
-        if let Some((id, handle)) = pending.0.remove_entry(&id) {
-            sprites.sprites.insert(id, handle);
+    for handle in to_complete {
+        if let Some((id, image_handle)) = pending.0.remove_entry(&handle) {
+            sprites.sprites.insert(id, image_handle);
         }
     }
 
-    for (id, asset_load_error) in to_fail {
-        pending.0.remove_entry(&id);
+    for (handle, asset_load_error) in to_fail {
+        pending.0.remove_entry(&handle);
         error!(
             "Failed to load asset for tile {}: {}",
-            registry.resolve(id).unwrap(),
+            registry.resolve(handle).unwrap(),
             asset_load_error
         );
     }

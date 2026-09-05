@@ -14,18 +14,19 @@ use bevy::{
     tasks::{IoTaskPool, Task, futures_lite::future},
 };
 
-use crate::modding::{
-    Definition, Id, ModInfo, ModLoadState, ModRegistry,
-    types::{DefPath, Registry},
+use crate::{
+    Config,
+    modding::{
+        DefHandle, Definition, ModInfo, ModLoadState, ModRegistry,
+        types::{DefId, Registry},
+    },
 };
-
-const MAX_CONCURRENT_IO: usize = 10;
 
 #[derive(Debug, Default, Resource)]
 pub struct TotalPending(pub usize);
 
 #[derive(Debug, Resource)]
-pub struct Pending<D: Definition>(pub VecDeque<(Id<ModInfo>, PathBuf)>, PhantomData<D>);
+pub struct Pending<D: Definition>(pub VecDeque<(DefHandle<ModInfo>, PathBuf)>, PhantomData<D>);
 
 impl<D: Definition> Default for Pending<D> {
     fn default() -> Self {
@@ -37,7 +38,7 @@ impl<D: Definition> Default for Pending<D> {
 pub struct TotalActive(pub usize);
 
 #[derive(Debug, Resource)]
-pub struct Active<D: Definition>(pub Vec<Task<Result<(DefPath, D), DefinitionLoadError>>>);
+pub struct Active<D: Definition>(pub Vec<Task<Result<(DefId, D), DefinitionLoadError>>>);
 
 impl<D: Definition> Default for Active<D> {
     fn default() -> Self {
@@ -94,9 +95,9 @@ pub fn discover<D: Definition>(
     mods: Res<ModRegistry>,
     mut total_pending: ResMut<TotalPending>,
 ) {
-    let definitions: VecDeque<(Id<ModInfo>, PathBuf)> = mods
-        .iter_enabled_with_id()
-        .flat_map(|(id, _, mod_info)| read_mod_dir(id, mod_info, D::DIR))
+    let definitions: VecDeque<(DefHandle<ModInfo>, PathBuf)> = mods
+        .iter_enabled_with_handle()
+        .flat_map(|(handle, mod_info)| read_mod_dir(handle, mod_info, D::DIR))
         .collect();
     total_pending.0 += definitions.len();
     commands.insert_resource(Pending::<D>(definitions, PhantomData));
@@ -104,13 +105,17 @@ pub fn discover<D: Definition>(
     commands.insert_resource(Complete::<D>::default());
 }
 
-fn read_mod_dir(id: Id<ModInfo>, mod_info: &ModInfo, path: &str) -> Vec<(Id<ModInfo>, PathBuf)> {
+fn read_mod_dir(
+    handle: DefHandle<ModInfo>,
+    mod_info: &ModInfo,
+    path: &str,
+) -> Vec<(DefHandle<ModInfo>, PathBuf)> {
     let path: &Path = &mod_info.path.join(path);
     fs::read_dir(path)
         .into_iter()
         .flatten()
         .flatten()
-        .map(|entry| (id, entry.path()))
+        .map(|entry| (handle, entry.path()))
         .filter(|(_, path)| path.extension().is_some_and(|ex| ex == "ron"))
         .collect()
 }
@@ -121,6 +126,7 @@ pub fn clear<D: Definition>(mut registry: ResMut<Registry<D>>) {
 
 pub fn spawn<D: Definition>(
     mods: Res<ModRegistry>,
+    config: Res<Config>,
     mut pending: ResMut<Pending<D>>,
     mut active: ResMut<Active<D>>,
     mut total_pending: ResMut<TotalPending>,
@@ -128,11 +134,11 @@ pub fn spawn<D: Definition>(
 ) {
     let pool = IoTaskPool::get();
 
-    while total_active.0 < MAX_CONCURRENT_IO
+    while total_active.0 < config.max_concurrent_io
         && let Some((mod_id, path)) = pending.0.pop_front()
     {
-        let mod_info = mods.get(mod_id).unwrap().id();
-        active.0.push(pool.spawn(D::load(mod_info.clone(), path)));
+        let id = mods.get(mod_id).unwrap().id();
+        active.0.push(pool.spawn(D::load(id.clone(), path)));
 
         total_pending.0 -= 1;
         total_active.0 += 1;
@@ -149,12 +155,12 @@ pub fn poll<D: Definition>(
     active.0.retain_mut(|task| {
         if let Some(result) = future::block_on(future::poll_once(task)) {
             match result {
-                Ok((path, def)) => {
-                    complete.0 += 1;
-                    registry.register(path, def);
+                Ok((id, def)) => {
+                    registry.register(id, def);
                 }
                 Err(err) => error!("Failed to load definition: {}", err),
             }
+            complete.0 += 1;
             total_active.0 -= 1;
             total_complete.0 += 1;
             false
@@ -175,7 +181,7 @@ pub fn check_loaded(
 }
 
 pub fn check<D: Definition + Debug>(registry: Res<Registry<D>>) {
-    info!("{}\n{:?}", type_name::<D>(), *registry);
+    debug!("{}\n{:?}", type_name::<D>(), *registry);
 }
 
 #[derive(Debug)]

@@ -35,13 +35,13 @@ fn update_text(
 ) {
     let mut text = text.single_mut().unwrap();
 
-    let path = cursor
+    let id = cursor
         .0
         .and_then(|cursor| world.get_tile(cursor.into()))
-        .and_then(|tile| registry.resolve(tile.id));
+        .and_then(|tile| registry.resolve(tile.handle));
 
-    text.0 = match path {
-        Some(path) => format!("{} {}\n", cursor.0.unwrap_or_default(), path),
+    text.0 = match id {
+        Some(id) => format!("{} {}\n", cursor.0.unwrap_or_default(), id),
         None => format!("{} none\n", cursor.0.unwrap_or_default()),
     };
 }

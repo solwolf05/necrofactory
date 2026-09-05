@@ -209,6 +209,6 @@ impl<'w> OverlappingTiles<'w> {
         &self,
         registry: &'a Registry<TileDef>,
     ) -> impl Iterator<Item = &'a TileDef> {
-        self.iter().flat_map(|(t, _)| registry.get(t.id))
+        self.iter().flat_map(|(t, _)| registry.get(t.handle))
     }
 }

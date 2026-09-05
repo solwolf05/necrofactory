@@ -4,6 +4,7 @@ use std::fs;
 
 use bevy::{
     camera::ScalingMode,
+    log::LogPlugin,
     prelude::*,
     window::{PresentMode, WindowMode, WindowResolution},
 };
@@ -19,8 +20,11 @@ use necrofactory::{
     graphics::GraphicsPlugin,
     input::{InputAction, InputPlugin, InputState, WorldCursor},
     item::ItemDef,
-    modding::{DefinitionPlugin, Id, ModAssetSourcePlugin, ModPlugin, Registry, ResolvedRegistry},
-    physics::{Collider, Drag, Mass, PhysicsPlugin, Restitution, Rigidbody},
+    modding::{
+        DefHandle, DefinitionPlugin, ModAssetSourcePlugin, ModdingPlugin, Registry,
+        ResolvedRegistry,
+    },
+    physics::{Collider, Drag, Mass, PhysicsPlugin, Restitution, Rigidbody, Velocity},
     player::{FuelTank, JetPackPlugin, Jetpack, JetpackControl, Player},
     world::{
         BaseChunk, RebaseSet, World, WorldPlugin, WorldTransform,
@@ -28,6 +32,7 @@ use necrofactory::{
     },
     world_gen::WorldGenPlugin,
 };
+use tracing::Level;
 
 fn main() -> AppExit {
     App::new()
@@ -42,16 +47,20 @@ fn main() -> AppExit {
                         #[cfg(debug_assertions)]
                         resolution: WindowResolution::new(1920, 1080),
                         #[cfg(not(debug_assertions))]
-                        mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
+                        mode: WindowMode::BorderlessFullscreen(MonitorSelection::Current),
                         present_mode: PresentMode::AutoNoVsync,
                         ..Default::default()
                     }),
                     ..Default::default()
                 })
-                .set(ImagePlugin::default_nearest()),
+                .set(ImagePlugin::default_nearest())
+                .set(LogPlugin {
+                    level: Level::DEBUG,
+                    ..Default::default()
+                }),
         )
         .add_plugins((
-            ModPlugin,
+            ModdingPlugin,
             DefinitionPlugin::<TileDef>::default(),
             DefinitionPlugin::<InputAction>::default(),
             DefinitionPlugin::<ItemDef>::default(),
@@ -122,7 +131,7 @@ fn boot(mut commands: Commands, mut state: ResMut<NextState<GameState>>) {
 }
 
 fn check_resolved(registry: Res<ResolvedRegistry<ResolvedRecipe>>) {
-    info!("{:?}", registry.into_inner());
+    debug!("{:?}", registry.into_inner());
 }
 
 fn setup(mut commands: Commands) {
@@ -146,7 +155,7 @@ fn setup(mut commands: Commands) {
         Drag(0.002),
         Restitution(0.5),
         Jetpack {
-            fuel_use_rate: 20.0,
+            fuel_use_rate: 5.0,
             force: 20.0,
         },
         FuelTank {
@@ -164,15 +173,6 @@ fn setup(mut commands: Commands) {
         Collider(Vec2::splat(1.0)),
         Drag(0.002),
         Restitution(0.5),
-        Jetpack {
-            fuel_use_rate: 20.0,
-            force: 20.0,
-        },
-        FuelTank {
-            fuel: 100.0,
-            max_fuel: 100.0,
-            fuel_regen_rate: 100.0,
-        },
     ));
 }
 
@@ -201,18 +201,18 @@ fn player_follow(player: Query<&WorldTransform, With<Player>>, mut base: ResMut<
 }
 
 fn player_move(
-    mut acceleration: Query<&mut JetpackControl, With<Player>>,
+    mut jetpack_control: Query<&mut JetpackControl, With<Player>>,
     input: Res<InputState>,
     registry: Res<Registry<InputAction>>,
 ) {
-    let mut jetpack_control = acceleration.single_mut().unwrap();
+    let mut jetpack_control = jetpack_control.single_mut().unwrap();
 
-    let left = registry.lookup("base::left").unwrap();
-    let right = registry.lookup("base::right").unwrap();
-    let fast = registry.lookup("base::fast").unwrap();
-    let up = registry.lookup("base::up").unwrap();
-    let down = registry.lookup("base::down").unwrap();
-    let hover = registry.lookup("base::hover").unwrap();
+    let left = registry.get_handle("base::left").unwrap();
+    let right = registry.get_handle("base::right").unwrap();
+    let fast = registry.get_handle("base::fast").unwrap();
+    let up = registry.get_handle("base::up").unwrap();
+    let down = registry.get_handle("base::down").unwrap();
+    let hover = registry.get_handle("base::hover").unwrap();
 
     let fast = input.pressed(fast) as i32 as f32 + 1.0;
 
@@ -231,14 +231,13 @@ fn zoom(
 ) {
     let projection = camera.single_mut().unwrap().into_inner();
     if let Projection::Orthographic(projection) = projection {
-        let zoom;
-        if input.just_pressed(registry.lookup("base::zoom_in").unwrap()) {
-            zoom = 1.0;
-        } else if input.just_pressed(registry.lookup("base::zoom_out").unwrap()) {
-            zoom = -1.0;
+        let zoom = if input.just_pressed(registry.get_handle("base::zoom_in").unwrap()) {
+            1.0
+        } else if input.just_pressed(registry.get_handle("base::zoom_out").unwrap()) {
+            -1.0
         } else {
-            zoom = 0.0;
-        }
+            0.0
+        };
         projection.scale *= 1.0 - zoom * 0.25;
     }
 }
@@ -252,12 +251,12 @@ fn toggle_tile(
     let Some(player_pos) = cursor.0 else {
         return;
     };
-    if input.just_pressed(registry.lookup("base::toggle").unwrap()) {
+    if input.just_pressed(registry.get_handle("base::toggle").unwrap()) {
         let pos = IVec2::from(player_pos).into();
         if world.contains_tile(pos) {
             world.remove_tile(pos);
         } else {
-            world.insert_tile(pos, Tile::new(Id::new(1)));
+            world.insert_tile(pos, Tile::new(DefHandle::new(1)));
         }
     }
 }

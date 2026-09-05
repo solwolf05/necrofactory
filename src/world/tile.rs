@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use serde::Deserialize;
 
-use crate::modding::{DefPath, Definition, DefinitionLoadError, Id};
+use crate::modding::{DefHandle, DefId, Definition, DefinitionLoadError};
 
 #[derive(Debug)]
 pub struct TileDef {
@@ -14,10 +14,10 @@ pub struct TileDef {
 impl Definition for TileDef {
     const DIR: &'static str = "tiles";
 
-    async fn load(mod_id: DefPath, path: PathBuf) -> Result<(DefPath, Self), DefinitionLoadError> {
+    async fn load(mod_id: DefId, path: PathBuf) -> Result<(DefId, Self), DefinitionLoadError> {
         #[derive(Deserialize)]
         struct RawTileDef {
-            path: DefPath,
+            id: DefId,
             sprite_path: String,
             friction: f32,
             restitution: f32,
@@ -26,10 +26,10 @@ impl Definition for TileDef {
         let string = fs::read_to_string(&path)?;
         let raw: RawTileDef = ron::from_str(&string).map_err(|e| (e, path))?;
 
-        let def_path = mod_id.join(raw.path);
+        let id = mod_id.join(raw.id);
 
         Ok((
-            def_path,
+            id,
             TileDef {
                 sprite_path: raw.sprite_path,
                 friction: raw.friction,
@@ -41,11 +41,11 @@ impl Definition for TileDef {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tile {
-    pub id: Id<TileDef>,
+    pub handle: DefHandle<TileDef>,
 }
 
 impl Tile {
-    pub fn new(id: Id<TileDef>) -> Self {
-        Self { id }
+    pub fn new(handle: DefHandle<TileDef>) -> Self {
+        Self { handle }
     }
 }

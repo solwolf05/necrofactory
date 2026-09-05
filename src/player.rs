@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use crate::physics::{Acceleration, GRAVITY, Grounded, Mass, PhysicsSet, Rigidbody, Velocity};
+use crate::physics::{
+    self, Acceleration, GRAVITY, Grounded, Mass, PhysicsSet, Rigidbody, Velocity,
+};
 
 #[derive(Component)]
 pub struct Player;
@@ -54,13 +56,23 @@ fn jetpack_system(
     for (jetpack, mut fuel_tank, control, velocity, mut acceleration, mass) in query {
         let mut throttle = control.throttle;
         if control.hover {
-            throttle.y += (GRAVITY * mass.0) / jetpack.force;
-            if control.throttle.length_squared() == 0.0 {
-                throttle -= (velocity.0 * mass.0) / jetpack.force * 10.0;
+            const HOVER_DAMPING: f32 = 5.0;
+            info!("before: {}", throttle);
+
+            if throttle.y == 0.0 {
+                throttle.y -= velocity.0.y * HOVER_DAMPING;
             }
+
+            if throttle.x == 0.0 {
+                throttle.x -= velocity.0.x * HOVER_DAMPING;
+            }
+
+            let gravity_throttle = physics::GRAVITY / (jetpack.force * mass.0);
+            throttle.y += gravity_throttle;
         }
         // Full throttle is 1 in each direction
-        throttle = throttle.clamp_length_max(1.0);
+        throttle = throttle.clamp(Vec2::NEG_ONE, Vec2::ONE);
+        info!("after: {}", throttle);
 
         if throttle == Vec2::ZERO {
             continue;

@@ -49,12 +49,12 @@ fn update_sprites(
                 }
                 continue;
             };
-            let id = tile.id;
+            let handle = tile.handle;
 
             if *visibility != Visibility::Inherited {
                 *visibility = Visibility::Inherited;
             }
-            let image = sprites.get(id);
+            let image = sprites.get(handle);
             if sprite.image != image {
                 sprite.image = image;
             }

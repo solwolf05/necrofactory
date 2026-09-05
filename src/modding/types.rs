@@ -7,43 +7,63 @@ use std::{
     hash::Hash,
     marker::PhantomData,
     num::NonZeroU32,
+    path::PathBuf,
     str::FromStr,
 };
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::modding::DefinitionLoadError;
+
+pub trait Definition: Sized + Send + Sync + 'static {
+    const DIR: &'static str;
+
+    fn load(
+        mod_id: DefId,
+        path: PathBuf,
+    ) -> impl Future<Output = Result<(DefId, Self), DefinitionLoadError>> + Send;
+
+    /// Extra setup
+    #[allow(unused)]
+    fn build(app: &mut App) {}
+}
+
 #[derive(Resource, Clone)]
 pub struct Registry<T> {
-    definitions: Vec<(DefPath, T)>,
-    lookup: HashMap<DefPath, Id<T>>,
+    definitions: Vec<T>,
+    ids: Vec<DefId>,
+    lookup: HashMap<DefId, DefHandle<T>>,
 }
 
 impl<T> Registry<T> {
     pub fn new() -> Self {
         Self {
             definitions: Vec::new(),
+            ids: Vec::new(),
             lookup: HashMap::new(),
         }
     }
 
-    /// Registers a definition with the given path and returns its ID.
+    /// Registers a definition with the given id and returns its ID.
     /// If the definition already exists, it is replaced and the existing ID is returned.
-    pub fn register(&mut self, path: DefPath, def: T) -> Option<Id<T>> {
-        if let Some(id) = self.lookup.get(&path).copied() {
-            self.definitions[id.index()].1 = def;
-            return Some(id);
+    pub fn register(&mut self, id: DefId, def: T) -> DefHandle<T> {
+        if let Some(handle) = self.lookup.get(&id).copied() {
+            self.definitions[handle.to_index()] = def;
+            return handle;
         }
 
-        let id = Id::from_index(self.definitions.len());
-        self.definitions.push((path.clone(), def));
-        self.lookup.insert(path, id);
+        let handle = DefHandle::from_index(self.definitions.len());
+        self.definitions.push(def);
+        self.ids.push(id.clone());
+        self.lookup.insert(id, handle);
 
-        Some(id)
+        handle
     }
 
     pub fn clear(&mut self) {
         self.definitions.clear();
+        self.ids.clear();
         self.lookup.clear();
     }
 
@@ -55,51 +75,63 @@ impl<T> Registry<T> {
         self.definitions.is_empty()
     }
 
-    /// Looks up the id of the definition associated with the given path.
-    pub fn lookup(&self, path: &str) -> Option<Id<T>> {
-        self.lookup.get(path).copied()
+    /// Retrieves the handle of the definition associated with the given ID.
+    pub fn get_handle(&self, id: &str) -> Option<DefHandle<T>> {
+        self.lookup.get(id).copied()
     }
 
-    /// Resolves the path of the definition associated with the given ID.
-    pub fn resolve(&self, id: Id<T>) -> Option<&DefPath> {
-        self.definitions.get(id.index()).map(|r| &r.0)
+    /// Retrieves the ID of the definition associated with the given handle.
+    pub fn resolve(&self, handle: DefHandle<T>) -> Option<&DefId> {
+        self.ids.get(handle.to_index())
     }
 
     /// Retrieves the definition associated with the given ID.
-    pub fn get(&self, id: Id<T>) -> Option<&T> {
-        self.definitions.get(id.index()).map(|r| &r.1)
+    pub fn get(&self, handle: DefHandle<T>) -> Option<&T> {
+        self.definitions.get(handle.to_index())
     }
 
-    /// Retrieves the definition associated with the given path.
-    pub fn get_by_path(&self, path: &str) -> Option<&T> {
-        self.lookup(path).and_then(|id| self.get(id))
+    /// Retrieves the definition associated with the given id.
+    pub fn get_by_id(&self, id: &str) -> Option<&T> {
+        self.get_handle(id).and_then(|id| self.get(id))
     }
 
-    pub fn contains(&self, id: Id<T>) -> bool {
-        self.definitions.len() > id.index()
+    pub fn contains(&self, handle: DefHandle<T>) -> bool {
+        self.definitions.len() > handle.to_index()
     }
 
-    pub fn contains_path(&self, path: &str) -> bool {
-        self.lookup.contains_key(path)
+    pub fn contains_id(&self, id: &str) -> bool {
+        self.lookup.contains_key(id)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&DefPath, &T)> {
-        self.definitions.iter().map(|(p, t)| (p, t))
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.definitions.iter()
+    }
+
+    pub fn iter_with_id(&self) -> impl Iterator<Item = (&DefId, &T)> {
+        self.ids.iter().zip(self.definitions.iter())
     }
 
     /// Order is guaranteed to be from lowest to highest id.
-    pub fn iter_with_id(&self) -> impl Iterator<Item = (Id<T>, &DefPath, &T)> {
+    pub fn iter_with_handle(&self) -> impl Iterator<Item = (DefHandle<T>, &T)> {
         self.definitions
             .iter()
             .enumerate()
-            .map(|(i, (p, t))| (Id::from_index(i), p, t))
+            .map(|(i, t)| (DefHandle::from_index(i), t))
+    }
+
+    pub fn iter_with_id_handle(&self) -> impl Iterator<Item = (DefHandle<T>, &DefId, &T)> {
+        self.ids
+            .iter()
+            .enumerate()
+            .zip(self.definitions.iter())
+            .map(|((i, id), t)| (DefHandle::from_index(i), id, t))
     }
 }
 
 impl<T: Debug> Debug for Registry<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (id, path, definition) in self.iter_with_id() {
-            writeln!(f, "{} {}: {:?}", id.get(), path, definition)?;
+        for (handle, id, definition) in self.iter_with_id_handle() {
+            writeln!(f, "{} {}: {:?}", handle.get(), id, definition)?;
         }
         Ok(())
     }
@@ -107,8 +139,8 @@ impl<T: Debug> Debug for Registry<T> {
 
 impl<T: Display> Display for Registry<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (id, path, definition) in self.iter_with_id() {
-            writeln!(f, "{} {}: {}", id.get(), path, definition)?;
+        for (handle, id, definition) in self.iter_with_id_handle() {
+            writeln!(f, "{} {}: {}", handle.get(), id, definition)?;
         }
         Ok(())
     }
@@ -118,100 +150,101 @@ impl<T> Default for Registry<T> {
     fn default() -> Self {
         Self {
             definitions: Vec::new(),
+            ids: Vec::new(),
             lookup: HashMap::new(),
         }
     }
 }
 
-/// A id to a definition in a registry.
-pub struct Id<T>(NonZeroU32, PhantomData<T>);
+/// A wrapper over `NonZeroU32` index into a registry.
+pub struct DefHandle<T>(NonZeroU32, PhantomData<fn() -> T>);
 
-impl<T> Id<T> {
-    pub const fn new(id: u32) -> Self {
-        Self(NonZeroU32::new(id).unwrap(), PhantomData)
+impl<T> DefHandle<T> {
+    pub const fn new(handle: u32) -> Self {
+        Self(NonZeroU32::new(handle).unwrap(), PhantomData)
     }
 
-    pub const fn from_index(id: usize) -> Self {
-        Self(NonZeroU32::new(id as u32 + 1).unwrap(), PhantomData)
+    pub const fn from_index(index: usize) -> Self {
+        Self(NonZeroU32::new(index as u32 + 1).unwrap(), PhantomData)
     }
 
     pub const fn get(&self) -> u32 {
         self.0.get()
     }
 
-    pub const fn index(&self) -> usize {
+    pub const fn to_index(&self) -> usize {
         self.0.get() as usize - 1
     }
 }
 
-impl<T> Debug for Id<T> {
+impl<T> Debug for DefHandle<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Id({})", self.0)
+        write!(f, "Handle({})", self.0)
     }
 }
 
-impl<T> Display for Id<T> {
+impl<T> Display for DefHandle<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl<T> Clone for Id<T> {
+impl<T> Clone for DefHandle<T> {
     fn clone(&self) -> Self {
         Self(self.0, PhantomData)
     }
 }
 
-impl<T> Copy for Id<T> {}
+impl<T> Copy for DefHandle<T> {}
 
-impl<T> PartialEq for Id<T> {
+impl<T> PartialEq for DefHandle<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<T> Eq for Id<T> {}
+impl<T> Eq for DefHandle<T> {}
 
-impl<T> PartialOrd for Id<T> {
+impl<T> PartialOrd for DefHandle<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.0.partial_cmp(&other.0)
     }
 }
 
-impl<T> Ord for Id<T> {
+impl<T> Ord for DefHandle<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
     }
 }
 
-impl<T> Hash for Id<T> {
+impl<T> Hash for DefHandle<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }
 
-/// A newtype wrapper over a `String` that ensures the path is valid.
+/// A newtype wrapper over a `String` that ensures the id is valid.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deref)]
-pub struct DefPath(String);
+pub struct DefId(String);
 
-impl DefPath {
-    pub fn new(path: impl Into<String>) -> Option<Self> {
-        let path = path.into();
-        if !Self::is_valid_path(&path) {
+impl DefId {
+    pub fn new(id: impl Into<String>) -> Option<Self> {
+        let id = id.into();
+        if !Self::is_valid_id(&id) {
             return None;
         }
-        Some(Self(path.into()))
+        Some(Self(id.into()))
     }
 
-    pub fn new_qualified(path: impl Into<String>) -> Option<Self> {
-        let path = path.into();
-        if !Self::is_valid_qualified_path(&path) {
+    pub fn new_qualified(id: impl Into<String>) -> Option<Self> {
+        let id = id.into();
+        if !Self::is_valid_qualified_id(&id) {
             return None;
         }
-        Some(Self(path.into()))
+        Some(Self(id.into()))
     }
 
-    pub fn join(&self, other: DefPath) -> DefPath {
+    pub fn join(&self, other: DefId) -> DefId {
         Self(format!("{}::{}", self, other))
     }
 
@@ -219,21 +252,21 @@ impl DefPath {
         self.0.split("::")
     }
 
-    pub fn is_valid_path(path: &str) -> bool {
-        Self::validate_path(path, 1)
+    pub fn is_valid_id(id: &str) -> bool {
+        Self::validate_id(id, 1)
     }
 
-    pub fn is_valid_qualified_path(path: &str) -> bool {
-        Self::validate_path(path, 2)
+    pub fn is_valid_qualified_id(id: &str) -> bool {
+        Self::validate_id(id, 2)
     }
 
-    /// Helper that validates a path and ensures minimum segment count
-    fn validate_path(path: &str, min_segments: usize) -> bool {
-        if path.is_empty() {
+    /// Helper that validates a id and ensures minimum segment count
+    fn validate_id(id: &str, min_segments: usize) -> bool {
+        if id.is_empty() {
             return false;
         }
 
-        let segments: Vec<&str> = path.split("::").collect();
+        let segments: Vec<&str> = id.split("::").collect();
         if segments.len() < min_segments {
             return false;
         }
@@ -264,13 +297,13 @@ impl DefPath {
     }
 }
 
-impl Display for DefPath {
+impl Display for DefId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl TryFrom<&str> for DefPath {
+impl TryFrom<&str> for DefId {
     type Error = ();
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
@@ -278,7 +311,7 @@ impl TryFrom<&str> for DefPath {
     }
 }
 
-impl TryFrom<String> for DefPath {
+impl TryFrom<String> for DefId {
     type Error = ();
 
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
@@ -286,7 +319,7 @@ impl TryFrom<String> for DefPath {
     }
 }
 
-impl FromStr for DefPath {
+impl FromStr for DefId {
     type Err = ();
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
@@ -294,13 +327,13 @@ impl FromStr for DefPath {
     }
 }
 
-impl Borrow<str> for DefPath {
+impl Borrow<str> for DefId {
     fn borrow(&self) -> &str {
         &self.0
     }
 }
 
-impl Serialize for DefPath {
+impl Serialize for DefId {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -309,7 +342,7 @@ impl Serialize for DefPath {
     }
 }
 
-impl<'de> Deserialize<'de> for DefPath {
+impl<'de> Deserialize<'de> for DefId {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

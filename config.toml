@@ -1,3 +1,4 @@
-[mods]
-installed = []
-enabled = ["base"]
+mods_dir = ""
+enabled_mods = ["base"]
+disabled_mods = []
+max_concurrent_io = 30

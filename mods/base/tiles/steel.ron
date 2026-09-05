@@ -1,5 +1,5 @@
 (
-    path: "steel",
+    id: "steel",
     sprite_path: "mods://base/assets/block.png",
     friction: 0.1,
     restitution: 0.05

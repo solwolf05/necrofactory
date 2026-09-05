@@ -7,7 +7,7 @@ use std::{
 use bevy::prelude::*;
 use semver::{Version, VersionReq};
 
-use crate::modding::{DefPath, Id, ModInfo, ModLoadState, ModRegistry};
+use crate::modding::{DefHandle, DefId, ModInfo, ModLoadState, ModRegistry};
 
 pub fn validate_mods(
     mut next_state: ResMut<NextState<ModLoadState>>,
@@ -17,14 +17,14 @@ pub fn validate_mods(
 
     if let Err(dep_errors) = validate_dependencies(&mods) {
         for error in dep_errors {
-            error.mods().into_iter().for_each(|path| mods.disable(path));
+            error.mods().into_iter().for_each(|id| mods.disable(id));
             error!("Validation error: {}", error);
         }
     }
 
     if let Err(cycle_errors) = detect_cycles(&mods) {
         for error in cycle_errors {
-            error.mods().into_iter().for_each(|path| mods.disable(path));
+            error.mods().into_iter().for_each(|id| mods.disable(id));
             error!("Validation error: {}", error);
         }
     }
@@ -39,7 +39,7 @@ pub fn validate_mods(
         }
         Err(errors) => {
             for error in errors {
-                error.mods().into_iter().for_each(|path| mods.disable(path));
+                error.mods().into_iter().for_each(|id| mods.disable(id));
                 error!("Validation error: {}", error);
             }
         }
@@ -51,19 +51,19 @@ pub fn validate_mods(
 pub enum ModValidationError {
     /// A version constraint is not satisfied
     VersionMismatch {
-        dependent: DefPath,
-        dependency: DefPath,
+        dependent: DefId,
+        dependency: DefId,
         required: String,
         found: Option<String>,
     },
     /// Circular dependency detected
-    CircularDependency { cycle: Vec<DefPath> },
+    CircularDependency { cycle: Vec<DefId> },
 }
 
 impl ModValidationError {
     #[allow(dead_code)]
     /// Returns the IDs of the mods involved in the error
-    pub fn mods(&self) -> Vec<&DefPath> {
+    pub fn mods(&self) -> Vec<&DefId> {
         match self {
             ModValidationError::VersionMismatch { dependent, .. } => vec![dependent],
             ModValidationError::CircularDependency { cycle } => cycle.iter().collect(),
@@ -116,9 +116,9 @@ impl std::error::Error for ModValidationError {}
 fn validate_dependencies(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> {
     let mut errors = Vec::new();
 
-    for (path, info) in registry.iter_enabled() {
-        validate_required_dependencies(registry, &mut errors, path, info);
-        validate_optional_dependencies(registry, &mut errors, path, info);
+    for (id, info) in registry.iter_enabled_with_id() {
+        validate_required_dependencies(registry, &mut errors, id, info);
+        validate_optional_dependencies(registry, &mut errors, id, info);
     }
 
     if errors.is_empty() {
@@ -131,11 +131,11 @@ fn validate_dependencies(registry: &ModRegistry) -> Result<(), Vec<ModValidation
 fn validate_required_dependencies(
     registry: &ModRegistry,
     errors: &mut Vec<ModValidationError>,
-    path: &DefPath,
+    path: &DefId,
     info: &ModInfo,
 ) {
     for (dep_path, version_req) in info.dependencies() {
-        let Some(dep_info) = registry.get_enabled_by_segment(&dep_path) else {
+        let Some(dep_info) = registry.get_enabled_by_id(&dep_path) else {
             errors.push(ModValidationError::VersionMismatch {
                 dependent: path.clone(),
                 dependency: dep_path.clone(),
@@ -164,11 +164,11 @@ fn validate_required_dependencies(
 fn validate_optional_dependencies(
     registry: &ModRegistry,
     errors: &mut Vec<ModValidationError>,
-    path: &DefPath,
+    path: &DefId,
     info: &ModInfo,
 ) {
     for (dep_path, version_req) in info.optional_dependencies() {
-        let Some(dep_info) = registry.get_enabled_by_segment(&dep_path) else {
+        let Some(dep_info) = registry.get_enabled_by_id(&dep_path) else {
             continue;
         };
 
@@ -196,20 +196,20 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
     let mut path = Vec::new();
 
     fn dfs(
-        id: Id<ModInfo>,
+        handle: DefHandle<ModInfo>,
         registry: &ModRegistry,
-        visited: &mut HashSet<Id<ModInfo>>,
-        rec_stack: &mut HashSet<Id<ModInfo>>,
-        path: &mut Vec<Id<ModInfo>>,
+        visited: &mut HashSet<DefHandle<ModInfo>>,
+        rec_stack: &mut HashSet<DefHandle<ModInfo>>,
+        path: &mut Vec<DefHandle<ModInfo>>,
         errors: &mut Vec<ModValidationError>,
     ) -> bool {
-        visited.insert(id);
-        rec_stack.insert(id);
-        path.push(id);
+        visited.insert(handle);
+        rec_stack.insert(handle);
+        path.push(handle);
 
-        if let Some(mod_info) = registry.get(id) {
-            for (dep_path, _) in mod_info.dependencies() {
-                let Some(dep_id) = registry.lookup_enabled(dep_path) else {
+        if let Some(mod_info) = registry.get(handle) {
+            for (dep_id, _) in mod_info.dependencies() {
+                let Some(dep_id) = registry.get_handle_enabled(dep_id) else {
                     unreachable!("should have already been validated");
                 };
 
@@ -219,17 +219,17 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
                     }
                 } else if rec_stack.contains(&dep_id) {
                     let cycle_start = path.iter().position(|&x| x == dep_id).unwrap();
-                    let cycle: Vec<DefPath> = path[cycle_start..]
+                    let cycle: Vec<DefId> = path[cycle_start..]
                         .into_iter()
-                        .map(|&id| registry.resolve(id).unwrap().clone())
+                        .map(|&handle| registry.get_id(handle).unwrap().clone())
                         .collect();
                     errors.push(ModValidationError::CircularDependency { cycle });
                     return true;
                 }
             }
 
-            for (dep_path, _) in mod_info.optional_dependencies() {
-                let Some(dep_id) = registry.lookup_enabled(dep_path) else {
+            for (dep_id, _) in mod_info.optional_dependencies() {
+                let Some(dep_id) = registry.get_handle_enabled(dep_id) else {
                     continue;
                 };
 
@@ -239,9 +239,9 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
                     }
                 } else if rec_stack.contains(&dep_id) {
                     let cycle_start = path.iter().position(|&x| x == dep_id).unwrap();
-                    let cycle: Vec<DefPath> = path[cycle_start..]
+                    let cycle: Vec<DefId> = path[cycle_start..]
                         .into_iter()
-                        .map(|&id| registry.resolve(id).unwrap().clone())
+                        .map(|&handle| registry.get_id(handle).unwrap().clone())
                         .collect();
                     errors.push(ModValidationError::CircularDependency { cycle });
                     return true;
@@ -250,14 +250,14 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
         }
 
         path.pop();
-        rec_stack.remove(&id);
+        rec_stack.remove(&handle);
         false
     }
 
-    for (id, ..) in registry.iter_enabled_with_id() {
-        if !visited.contains(&id) {
+    for (handle, _) in registry.iter_enabled_with_handle() {
+        if !visited.contains(&handle) {
             dfs(
-                id,
+                handle,
                 registry,
                 &mut visited,
                 &mut rec_stack,
@@ -275,41 +275,43 @@ fn detect_cycles(registry: &ModRegistry) -> Result<(), Vec<ModValidationError>> 
 }
 
 /// Perform topological sort using Kahn's algorithm
-fn topological_sort(registry: &ModRegistry) -> Result<Vec<Id<ModInfo>>, Vec<ModValidationError>> {
-    let mut in_degree: HashMap<Id<ModInfo>, usize> = HashMap::new();
-    let mut adjacency: HashMap<Id<ModInfo>, Vec<Id<ModInfo>>> = HashMap::new();
+fn topological_sort(
+    registry: &ModRegistry,
+) -> Result<Vec<DefHandle<ModInfo>>, Vec<ModValidationError>> {
+    let mut in_degree: HashMap<DefHandle<ModInfo>, usize> = HashMap::new();
+    let mut adjacency: HashMap<DefHandle<ModInfo>, Vec<DefHandle<ModInfo>>> = HashMap::new();
 
     // Initialize in-degree and adjacency list
-    for (id, ..) in registry.iter_enabled_with_id() {
-        in_degree.insert(id, 0);
-        adjacency.insert(id, Vec::new());
+    for (handle, _) in registry.iter_enabled_with_handle() {
+        in_degree.insert(handle, 0);
+        adjacency.insert(handle, Vec::new());
     }
 
     // Build the graph: for each dependency, add an edge from dependency to dependent
-    for (id, _, info) in registry.iter_enabled_with_id() {
-        for (dep_path, _) in info.dependencies() {
-            if let Some(dep_id) = registry.lookup_enabled(dep_path) {
-                adjacency.entry(dep_id).and_modify(|deps| deps.push(id));
-                *in_degree.entry(id).or_insert(0) += 1;
+    for (handle, info) in registry.iter_enabled_with_handle() {
+        for (dep_id, _) in info.dependencies() {
+            if let Some(dep_id) = registry.get_handle_enabled(dep_id) {
+                adjacency.entry(dep_id).and_modify(|deps| deps.push(handle));
+                *in_degree.entry(handle).or_insert(0) += 1;
             }
         }
 
         for (dep_segment, _) in info.optional_dependencies() {
-            if let Some(dep_id) = registry.lookup_enabled(dep_segment) {
-                adjacency.entry(dep_id).and_modify(|deps| deps.push(id));
-                *in_degree.entry(id).or_insert(0) += 1;
+            if let Some(dep_id) = registry.get_handle_enabled(dep_segment) {
+                adjacency.entry(dep_id).and_modify(|deps| deps.push(handle));
+                *in_degree.entry(handle).or_insert(0) += 1;
             }
         }
     }
 
     // Kahn's algorithm: start with nodes that have zero in-degree
-    let mut queue: Vec<Id<ModInfo>> = in_degree
+    let mut queue: Vec<DefHandle<ModInfo>> = in_degree
         .iter()
         .filter(|(_, degree)| **degree == 0)
-        .map(|(&id, _)| id)
+        .map(|(&handle, _)| handle)
         .collect();
 
-    let mut result: Vec<Id<ModInfo>> = Vec::new();
+    let mut result: Vec<DefHandle<ModInfo>> = Vec::new();
 
     // Sort the queue to ensure deterministic order
     queue.sort();
@@ -356,21 +358,21 @@ mod tests {
             let mod_info = ModInfo {
                 path: std::path::PathBuf::from(format!("/mod/{}", id)),
                 metadata: ModMetadata {
-                    id: DefPath::new(id).unwrap(),
+                    id: DefId::new(id).unwrap(),
                     name: format!("{} Name", id),
                     version: "1.0.0".to_string(),
                     author: "Test Author".to_string(),
                     dependencies: deps
                         .into_iter()
-                        .map(|(dep, ver)| (DefPath::new(dep).unwrap(), ver.to_string()))
+                        .map(|(dep, ver)| (DefId::new(dep).unwrap(), ver.to_string()))
                         .collect(),
                     optional_dependencies: optional_deps
                         .into_iter()
-                        .map(|(dep, ver)| (DefPath::new(dep).unwrap(), ver.to_string()))
+                        .map(|(dep, ver)| (DefId::new(dep).unwrap(), ver.to_string()))
                         .collect(),
                 },
             };
-            registry.register(DefPath::new(id).unwrap(), mod_info);
+            registry.register(DefId::new(id).unwrap(), mod_info);
         }
         registry
     }
@@ -395,10 +397,10 @@ mod tests {
 
         // Register mod_b first with matching version
         let mod_b_info = registry
-            .get_enabled_by_segment(&DefPath::new("mod_b").unwrap())
+            .get_enabled_by_id(&DefId::new("mod_b").unwrap())
             .unwrap()
             .clone();
-        registry.register(DefPath::new("mod_b").unwrap(), mod_b_info);
+        registry.register(DefId::new("mod_b").unwrap(), mod_b_info);
 
         // This should not produce any errors
         let result = validate_dependencies(&registry);
@@ -534,18 +536,18 @@ mod tests {
         let order = result.unwrap();
         // mod_a should come before mod_b and mod_c
         let mod_a_id = registry
-            .lookup_enabled(&DefPath::new("mod_a").unwrap())
+            .get_handle_enabled(&DefId::new("mod_a").unwrap())
             .unwrap();
         let mod_b_id = registry
-            .lookup_enabled(&DefPath::new("mod_b").unwrap())
+            .get_handle_enabled(&DefId::new("mod_b").unwrap())
             .unwrap();
         let mod_c_id = registry
-            .lookup_enabled(&DefPath::new("mod_c").unwrap())
+            .get_handle_enabled(&DefId::new("mod_c").unwrap())
             .unwrap();
 
-        let mod_a_pos = order.iter().position(|&id| id == mod_a_id).unwrap();
-        let mod_b_pos = order.iter().position(|&id| id == mod_b_id).unwrap();
-        let mod_c_pos = order.iter().position(|&id| id == mod_c_id).unwrap();
+        let mod_a_pos = order.iter().position(|&handle| handle == mod_a_id).unwrap();
+        let mod_b_pos = order.iter().position(|&handle| handle == mod_b_id).unwrap();
+        let mod_c_pos = order.iter().position(|&handle| handle == mod_c_id).unwrap();
 
         assert!(mod_a_pos < mod_b_pos);
         assert!(mod_a_pos < mod_c_pos);
@@ -593,8 +595,8 @@ mod tests {
     #[test]
     fn test_validation_error_display_version_mismatch() {
         let error = ModValidationError::VersionMismatch {
-            dependent: DefPath::new("mod_a").unwrap(),
-            dependency: DefPath::new("mod_b").unwrap(),
+            dependent: DefId::new("mod_a").unwrap(),
+            dependency: DefId::new("mod_b").unwrap(),
             required: "^1.0".to_string(),
             found: None,
         };
@@ -603,8 +605,8 @@ mod tests {
         assert_eq!(error.to_string(), expected);
 
         let error_with_found = ModValidationError::VersionMismatch {
-            dependent: DefPath::new("mod_a").unwrap(),
-            dependency: DefPath::new("mod_b").unwrap(),
+            dependent: DefId::new("mod_a").unwrap(),
+            dependency: DefId::new("mod_b").unwrap(),
             required: "^2.0".to_string(),
             found: Some("1.0.0".to_string()),
         };
@@ -617,9 +619,9 @@ mod tests {
     fn test_validation_error_display_circular_dependency() {
         let error = ModValidationError::CircularDependency {
             cycle: vec![
-                DefPath::new("a").unwrap(),
-                DefPath::new("b").unwrap(),
-                DefPath::new("c").unwrap(),
+                DefId::new("a").unwrap(),
+                DefId::new("b").unwrap(),
+                DefId::new("c").unwrap(),
             ],
         };
 
@@ -647,26 +649,26 @@ mod tests {
 
         let order = topological_sort(&registry).unwrap();
         let e_id = registry
-            .lookup_enabled(&DefPath::new("mod_e").unwrap())
+            .get_handle_enabled(&DefId::new("mod_e").unwrap())
             .unwrap();
         let d_id = registry
-            .lookup_enabled(&DefPath::new("mod_d").unwrap())
+            .get_handle_enabled(&DefId::new("mod_d").unwrap())
             .unwrap();
         let c_id = registry
-            .lookup_enabled(&DefPath::new("mod_c").unwrap())
+            .get_handle_enabled(&DefId::new("mod_c").unwrap())
             .unwrap();
         let b_id = registry
-            .lookup_enabled(&DefPath::new("mod_b").unwrap())
+            .get_handle_enabled(&DefId::new("mod_b").unwrap())
             .unwrap();
         let a_id = registry
-            .lookup_enabled(&DefPath::new("mod_a").unwrap())
+            .get_handle_enabled(&DefId::new("mod_a").unwrap())
             .unwrap();
 
-        let e_pos = order.iter().position(|&id| id == e_id).unwrap();
-        let d_pos = order.iter().position(|&id| id == d_id).unwrap();
-        let c_pos = order.iter().position(|&id| id == c_id).unwrap();
-        let b_pos = order.iter().position(|&id| id == b_id).unwrap();
-        let a_pos = order.iter().position(|&id| id == a_id).unwrap();
+        let e_pos = order.iter().position(|&handle| handle == e_id).unwrap();
+        let d_pos = order.iter().position(|&handle| handle == d_id).unwrap();
+        let c_pos = order.iter().position(|&handle| handle == c_id).unwrap();
+        let b_pos = order.iter().position(|&handle| handle == b_id).unwrap();
+        let a_pos = order.iter().position(|&handle| handle == a_id).unwrap();
 
         // E should come first (no dependencies)
         assert!(e_pos < d_pos);

@@ -203,7 +203,7 @@ fn calculate_restitution_and_friction(
     let mut count = 0;
 
     for &(tile, _) in tiles {
-        if let Some(tile_def) = registry.get(tile.id) {
+        if let Some(tile_def) = registry.get(tile.handle) {
             tile_restitution = tile_restitution.max(tile_def.restitution);
             tile_friction += tile_def.friction;
             count += 1;
@@ -215,7 +215,7 @@ fn calculate_restitution_and_friction(
 
 fn log_collisions(mut collisions: MessageReader<CollisionEvent>) {
     for collision in collisions.read() {
-        info!("{:?}", collision);
+        // info!("{:?}", collision);
     }
 }
 

@@ -1,4 +1,4 @@
 (
-    path: "crafter",
+    id: "crafter",
     recipe_kinds: [ "base::crafting" ],
 )

@@ -1,7 +1,7 @@
 (
-    path: "toggle",
+    id: "toggle",
     name: "Toggle",
-    default: InputBinding (
+    default: (
         kind: MouseButton(Left),
         shift: false,
         control: false,

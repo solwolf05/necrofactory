@@ -1,5 +1,5 @@
 (
-    path: "hover",
+    id: "hover",
     name: "Hover",
     default: (
         kind: KeyButton(KeyH),

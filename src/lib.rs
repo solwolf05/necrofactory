@@ -2,10 +2,12 @@
 #![feature(iter_map_windows)]
 #![feature(option_reference_flattening)]
 
+use std::path::PathBuf;
+
 use bevy::{ecs::resource::Resource, state::state::States};
 use serde::{Deserialize, Serialize};
 
-use crate::modding::DefPath;
+use crate::modding::DefId;
 
 pub mod combat;
 pub mod debug;
@@ -32,59 +34,21 @@ pub enum GameState {
     Shutdown,
 }
 
-#[derive(Debug, Default, Clone, Resource)]
+#[derive(Debug, Clone, Resource, Serialize, Deserialize)]
 pub struct Config {
-    installed_mods: Vec<DefPath>,
-    enabled_mods: Vec<DefPath>,
+    mods_dir: PathBuf,
+    enabled_mods: Vec<DefId>,
+    disabled_mods: Vec<DefId>,
+    max_concurrent_io: usize,
 }
 
-impl Serialize for Config {
-    fn serialize<S>(&self, serializer: S) -> std::prelude::v1::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        #[derive(Serialize)]
-        struct RawConfig<'a> {
-            mods: Mods<'a>,
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            mods_dir: "".into(),
+            enabled_mods: Vec::new(),
+            disabled_mods: Vec::new(),
+            max_concurrent_io: 10,
         }
-
-        #[derive(Serialize)]
-        struct Mods<'a> {
-            installed: &'a [DefPath],
-            enabled: &'a [DefPath],
-        }
-
-        let raw = RawConfig {
-            mods: Mods {
-                installed: &self.installed_mods,
-                enabled: &self.enabled_mods,
-            },
-        };
-
-        raw.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Config {
-    fn deserialize<D>(deserializer: D) -> std::prelude::v1::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct RawConfig {
-            mods: Mods,
-        }
-
-        #[derive(Deserialize)]
-        struct Mods {
-            installed: Vec<DefPath>,
-            enabled: Vec<DefPath>,
-        }
-
-        let raw = RawConfig::deserialize(deserializer)?;
-        Ok(Config {
-            installed_mods: raw.mods.installed,
-            enabled_mods: raw.mods.enabled,
-        })
     }
 }
